@@ -363,7 +363,7 @@ rfbBool
 ConnectToRFBServer(rfbClient* client,const char *hostname, int port)
 {
   unsigned int host;
-
+	printf("HALLLLO\n");
   if (client->serverPort==-1) {
     /* serverHost is a file recorded by vncrec. */
     const char* magic="vncLog0.0";
@@ -390,13 +390,6 @@ ConnectToRFBServer(rfbClient* client,const char *hostname, int port)
     client->sock = 0;
     return TRUE;
   }
-
-#ifndef WIN32
-  if(IsUnixSocket(hostname))
-    /* serverHost is a UNIX socket. */
-    client->sock = ConnectClientToUnixSock(hostname);
-  else
-#endif
   {
     /* serverHost is a hostname */
     if (!StringToIPAddr(hostname, &host)) {
@@ -404,6 +397,7 @@ ConnectToRFBServer(rfbClient* client,const char *hostname, int port)
       return FALSE;
     }
     client->sock = ConnectClientToTcpAddr(host, port);
+	printf("%u\n", client->sock);
   }
 
   if (client->sock < 0) {
@@ -1677,37 +1671,37 @@ HandleRFBServerMessage(rfbClient* client)
 #include "rbfproto/corre.c"
 #include "rbfproto/hextile.c"
 #include "rbfproto/ultra.c"
-#include "zlib.c"
-#include "tight.c"
-#include "zrle.c"
+#include "rbfproto/zlib.c"
+#include "rbfproto/tight.c"
+#include "rbfproto/zrle.c"
 #undef BPP
 #define BPP 16
 #include "rbfproto/rre.c"
 #include "rbfproto/corre.c"
 #include "rbfproto/hextile.c"
 #include "rbfproto/ultra.c"
-#include "zlib.c"
-#include "tight.c"
-#include "zrle.c"
+#include "rbfproto/zlib.c"
+#include "rbfproto/tight.c"
+#include "rbfproto/zrle.c"
 #define REALBPP 15
-#include "zrle.c"
+#include "rbfproto/zrle.c"
 #undef BPP
 #define BPP 32
 #include "rbfproto/rre.c"
 #include "rbfproto/corre.c"
 #include "rbfproto/hextile.c"
 #include "rbfproto/ultra.c"
-#include "zlib.c"
-#include "tight.c"
-#include "zrle.c"
+#include "rbfproto/zlib.c"
+#include "rbfproto/tight.c"
+#include "rbfproto/zrle.c"
 #define REALBPP 24
-#include "zrle.c"
+#include "rbfproto/zrle.c"
 #define REALBPP 24
 #define UNCOMP 8
-#include "zrle.c"
+#include "rbfproto/zrle.c"
 #define REALBPP 24
 #define UNCOMP -8
-#include "zrle.c"
+#include "rbfproto/zrle.c"
 #undef BPP
 
 

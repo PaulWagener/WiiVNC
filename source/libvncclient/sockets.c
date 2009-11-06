@@ -278,11 +278,14 @@ ConnectClientToTcpAddr(unsigned int host, int port)
   }
 #endif
 
-  addr.sin_family = AF_INET;
+  addr.sin_family = PF_INET;
   addr.sin_port = htons(port);
   addr.sin_addr.s_addr = host;
 
-  sock = socket(AF_INET, SOCK_STREAM, 0);
+  sock = socket(PF_INET, SOCK_STREAM, 0);
+  s32 res = net_fcntl (sock, F_GETFL, 0);
+  res = net_fcntl (sock, F_SETFL, res | 4);
+
   if (sock < 0) {
 #ifdef WIN32
     errno=WSAGetLastError();
@@ -291,7 +294,27 @@ ConnectClientToTcpAddr(unsigned int host, int port)
     return -1;
   }
 
-  if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+	while (true) {
+		res = net_connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+		
+		if (res < 0) {
+			printf("  fout: %d\n", res);
+			if (res == -EISCONN || res == -EALREADY) {
+				res = 0;
+		        break;
+			}
+			
+			if (res == -EINPROGRESS) {
+				usleep (20 * 1000);
+				continue;
+			}
+		}
+		break;
+	}
+	
+
+
+  if (res < 0) {
     rfbClientErr("ConnectToTcpAddr: connect\n");
     close(sock);
     return -1;
