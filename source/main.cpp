@@ -69,26 +69,34 @@ int main(int argc, char **argv) {
 	Cursor cursor = Cursor();
 	LWP_CreateThread(&initnetworkthread, init_network, NULL, NULL, 0, 80);
 	while(1) {
+		char charbuf[400];
+		
+		
 		cursor.Update();
-		GX_Text("Hello World").Draw(300, 300);
-		if(viewer != NULL)
-			viewer->Draw();
-		/*
+
 		if(viewer != NULL)
 		{
+			if(viewer->num_screenparts > 0) {
+			Viewer::ScreenPart *s = viewer->screenparts[2];
+			sprintf(charbuf, "numscreenparts: %u %u %u %u", s->offset_x, s->offset_y, s->width, s->height);
+			GX_Text(charbuf).Draw(300, 300);
+			}
+			
+			
+			viewer->Update();
 			viewer->Draw();
 			switch(viewer->status)
 			{
-				case CONNECTING:
+				case VNC_CONNECTING:
 					GX_Text("VNC verbinden...").Draw(100, 200);
 					break;
-				case NEED_PASSWORD:
+				case VNC_NEEDPASSWORD:
 					GX_Text("Wachtwoord nodig...").Draw(100, 200);
 					break;
-				case CONNECTED:
+				case VNC_CONNECTED:
 					GX_Text("VNC verbonden...").Draw(100, 200);
 					break;
-				case DISCONNECTED:
+				case VNC_DISCONNECTED:
 					GX_Text("VNC niet verbonden...").Draw(100, 200);
 					break;
 			}
@@ -97,7 +105,7 @@ int main(int argc, char **argv) {
 		}
 		//*/
 			
-		/*
+		//*
 		switch(network_status)
 		{
 			case NO_NETWORK:
@@ -116,7 +124,7 @@ int main(int argc, char **argv) {
 		//*
 		if(network_status == NETWORK_CONNECTED && viewer == NULL) {
 			printf("\n\n\n\n\n\n    Connecting to VNC...\n");
-			viewer = new Viewer("flup");
+			viewer = new Viewer("192.168.0.130", 5900, "wac");
 		}
 		//*/
 

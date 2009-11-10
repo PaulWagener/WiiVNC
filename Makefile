@@ -17,7 +17,7 @@ include $(DEVKITPPC)/wii_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
-SOURCES		:=	source source/libvncclient source/GRRLIB
+SOURCES		:=	source source/libpng source/libpng/pngu source/libvncclient source/libfreetype source/gfx
 DATA		:=	data  
 INCLUDES	:=	
 
@@ -27,14 +27,14 @@ INCLUDES	:=
 
 CFLAGS	= -g -O2 -mrvl -Wall $(MACHDEP) $(INCLUDE) -I../include
 CXXFLAGS	=	$(CFLAGS)
+CPPFLAGS	=	$(CFLAGS)
 
 LDFLAGS	=	-g $(MACHDEP) -mrvl -Wl,-Map,$(notdir $@).map
 
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project
 #---------------------------------------------------------------------------------
-LIBS	:=	-ljpeg -lpng -lz -lwiiuse -lbte -ldb -logc -lm
-
+LIBS	:=	-lfreetype -lpng -ljpeg -lz -lwiiuse -lbte -ldb -logc -lm
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib
@@ -129,6 +129,10 @@ $(OUTPUT).elf: $(OFILES)
 #---------------------------------------------------------------------------------
 %.jpg.o	:	%.jpg
 #---------------------------------------------------------------------------------
+	@echo $(notdir $<)
+	$(bin2o)
+
+%.ttf.o : %.ttf
 	@echo $(notdir $<)
 	$(bin2o)
 

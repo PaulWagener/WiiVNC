@@ -87,7 +87,7 @@ int GX_Initialize()
     GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST,   GX_F32, 0);
     // Colour 0 is 8bit RGBA format
     GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-    GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+    GX_SetZMode(GX_FALSE, GX_LEQUAL, GX_FALSE);
 
     GX_SetNumChans(1);    // colour is the same as vertex colour
     GX_SetNumTexGens(1);  // One texture exists
@@ -119,7 +119,6 @@ void GX_Render()
     GX_DrawDone();          // Tell the GX engine we are done drawing
     GX_InvalidateTexAll();
 
-    GX_SetZMode      (GX_TRUE, GX_LEQUAL, GX_TRUE);
     GX_SetColorUpdate(GX_TRUE);
     GX_CopyDisp      (xfb[fb], GX_TRUE);
 
