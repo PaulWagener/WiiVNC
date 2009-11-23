@@ -44,8 +44,8 @@ void Cursor::Update()
 	if(PAD_ButtonsHeld(0) & PAD_BUTTON_LEFT)
 		x--;
 	if(PAD_ButtonsHeld(0) & PAD_BUTTON_B) {
-		Viewer::instance->screen_x = 0;
-		Viewer::instance->screen_y = 0;
+		Viewer::instance->scrollto_x = 0;
+		Viewer::instance->scrollto_y = 0;
 	}
 	if(PAD_ButtonsHeld(0) & PAD_BUTTON_UP)
 		y--;
@@ -54,18 +54,18 @@ void Cursor::Update()
 		
 	//*
 	if(Viewer::instance != NULL && Viewer::instance->status == VNC_CONNECTED) {
-		Viewer::instance->screen_x += PAD_StickX(0) / 10;
-		Viewer::instance->screen_y -= PAD_StickY(0) / 10;
+		Viewer::instance->scrollto_x += PAD_StickX(0) / 10;
+		Viewer::instance->scrollto_y -= PAD_StickY(0) / 10;
 	}
 	//*/
 	
 	
 	
-	if(PAD_ButtonsHeld(0) && Viewer::instance != NULL && Viewer::instance->status == VNC_CONNECTED)
-		Viewer::instance->SendCursorPosition(x,y);
+	//if(PAD_ButtonsHeld(0) && Viewer::instance != NULL && Viewer::instance->status == VNC_CONNECTED)
+	//	Viewer::instance->SendCursorPosition(x,y);
 		
-	if(PAD_ButtonsHeld(0) & PAD_BUTTON_A)
-		SendPointerEvent(Viewer::instance->client, x, y, 0) ;
+	//if(PAD_ButtonsHeld(0) & PAD_BUTTON_A)
+	//	SendPointerEvent(Viewer::instance->client, x, y, 0) ;
 
 }
 

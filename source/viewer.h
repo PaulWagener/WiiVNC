@@ -32,8 +32,10 @@ public:
 	struct Point {
 		int x, y;
 	};
-	struct Point Screen2VNC(int x, int y);
-	struct Point VNC2Screen(int x, int y);
+	int Screen2VNC(int pixels);
+	int VNC2Screen(int pixels);
+	struct Point Screen2VNCPoint(int x, int y);
+	struct Point VNC2ScreenPoint(int x, int y);
 
 public:
 	//A list of textures that make up the entire screen
@@ -45,9 +47,15 @@ public:
 	int height, width;
 	
 	float zoom;
-	int zoom_target;
-	float zoomto_x, zoomto_y;
+	float zoom_target;
+	#define max_zoom 2
+	float min_zoom;
+	
+	float scrollto_x, scrollto_y;
 	float screen_x, screen_y;
+	
+	
+
 
 	//The VNC connection to the server
 	//Thanks libvncclient© for making my life this easy! 

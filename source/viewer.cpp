@@ -105,8 +105,13 @@ Viewer::~Viewer()
 	instance = NULL;
 }
 
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 480
+
 #define SCREENPART_WIDTH 640
 #define SCREENPART_HEIGHT 480
+
+#include <math.h>
 #define hdiv(x,div)    (x/div + (x%div ? 1 : 0)) //Rounding up division
 void Viewer::InitializeScreen(int theWidth, int theHeight)
 {
@@ -114,9 +119,14 @@ void Viewer::InitializeScreen(int theWidth, int theHeight)
 	height = theHeight;
 	screen_x = width / 2;
 	screen_y = height / 2;
-	zoomto_x = screen_x;
-	zoomto_y = screen_y;
-	zoom_target = 3;
+	scrollto_x = screen_x;
+	scrollto_y = screen_y;
+	
+	width = 1280;
+	
+	min_zoom = MIN(log2f(SCREEN_HEIGHT / (float)height), log2f(SCREEN_WIDTH / (float)width));
+	
+	zoom_target = 0;
 	zoom = zoom_target;
 
 	//Delete old ScreenParts (if any)
@@ -198,35 +208,45 @@ void Viewer::ScreenUpdateCallback(rfbClient* client, int x, int y, int w, int h)
 #define SCREEN_YCENTER 240
 #include <math.h>
 
+//Converts pixeldistance on screen to pixeldistance on VNC display
+int Viewer::Screen2VNC(int pixels) {
+	return pixels / powf(2, zoom);
+}	
+
+//Converts pixeldistance on VNC display to pixeldistance on screen
+int Viewer::VNC2Screen(int pixels) {
+	return pixels * powf(2, zoom);
+}
+
 /**
- * Converts a point at the local screen to a pixel on the VNC display 
+ * Converts a pixel at the local screen to a pixel on the VNC display 
  */
-struct Viewer::Point Viewer::Screen2VNC(int x, int y)
+struct Viewer::Point Viewer::Screen2VNCPoint(int x, int y)
 {
 	struct Point vnc;
-	vnc.x = screen_x + (x - SCREEN_XCENTER / powf(2, zoom));
-	vnc.y = screen_y + (y - SCREEN_YCENTER / powf(2, zoom));
+	vnc.x = screen_x + Screen2VNC(x - SCREEN_XCENTER);
+	vnc.y = screen_y + Screen2VNC(y - SCREEN_YCENTER);
 	return vnc;
 }	
 
 /**
- * Converts a point on the VNC display to a pixel on the local screen
+ * Converts a pixel on the VNC display to a pixel on the local screen
  */
-struct Viewer::Point Viewer::VNC2Screen(int x, int y)
+struct Viewer::Point Viewer::VNC2ScreenPoint(int x, int y)
 {
 	struct Point screen;
-	screen.x = SCREEN_XCENTER + ((x - screen_x) * powf(2, zoom));
-	screen.y = SCREEN_YCENTER + ((y - screen_y) * powf(2, zoom));
+	screen.x = SCREEN_XCENTER + VNC2Screen(x - screen_x);
+	screen.y = SCREEN_YCENTER + VNC2Screen(y - screen_y);
 	return screen;
-}	
+}
 
 void Viewer::Draw()
 {
 	int i;
 	for(i = 0; i < num_screenparts; i++)
 	{
-		struct Point topleft = VNC2Screen(screenparts[i]->offset_x, screenparts[i]->offset_y);
-		struct Point bottomright = VNC2Screen(screenparts[i]->offset_x + screenparts[i]->width, screenparts[i]->offset_y + screenparts[i]->height);
+		struct Point topleft = VNC2ScreenPoint(screenparts[i]->offset_x, screenparts[i]->offset_y);
+		struct Point bottomright = VNC2ScreenPoint(screenparts[i]->offset_x + screenparts[i]->width, screenparts[i]->offset_y + screenparts[i]->height);
 		
 		screenparts[i]->Draw(topleft.x, topleft.y, bottomright.x - topleft.x, bottomright.y - topleft.y);
 	}
@@ -234,9 +254,20 @@ void Viewer::Draw()
 
 void Viewer::Update()
 {
+	if(zoom_target <= min_zoom) {
+		//Don't drift of the edges of the display
+		int horizontal_margin = Screen2VNC((SCREEN_WIDTH) / 2);
+		int vertical_margin = Screen2VNC((SCREEN_HEIGHT) / 2);
+	
+		if(scrollto_x < horizontal_margin) scrollto_x = horizontal_margin;
+		if(scrollto_x > width - horizontal_margin) scrollto_x = width - horizontal_margin;
+		if(scrollto_y < vertical_margin) scrollto_y = vertical_margin;
+		if(scrollto_y > height - vertical_margin) scrollto_y = height - vertical_margin;
+	}
+
 	//Zoom animation
-	//screen_x += (zoomto_x - screen_x) / 10;
-	//screen_y += (zoomto_y - screen_y) / 10;
+	screen_x += (scrollto_x - screen_x) / 10;
+	screen_y += (scrollto_y - screen_y) / 10;
     zoom += (zoom_target - zoom) / 10;
 }
 
@@ -252,7 +283,7 @@ void Viewer::SendKeyUp(int key)
 
 void Viewer::SendCursorPosition(int x, int y)
 {
-	struct Point point = Screen2VNC(x, y);
+	struct Point point = Screen2VNCPoint(x, y);
 	cursor_x = point.x;
 	cursor_y = point.y;
 	SendPointerEvent(client, x,y, cursor_state);
@@ -288,10 +319,16 @@ void Viewer::SendScrollUp()
 
 void Viewer::ZoomIn()
 {
-	zoom_target++;
+	if(zoom_target < max_zoom)
+		zoom_target++;
 }
 
 void Viewer::ZoomOut()
 {
-	zoom_target--;
+	if(zoom_target-1 <= min_zoom) {
+		zoom_target = min_zoom;
+		scrollto_x = width / 2;
+		scrollto_y = height / 2;
+	} else
+		zoom_target--;
 }
