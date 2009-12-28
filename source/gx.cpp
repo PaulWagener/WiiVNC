@@ -116,20 +116,38 @@ int GX_Initialize()
 
 void GX_Render()
 {
-    GX_DrawDone();          // Tell the GX engine we are done drawing
+	GX_DrawDone();          // Tell the GX engine we are done drawing
+    GX_InvalidateTexAll();
+	
+    fb ^= 1;  // Toggle framebuffer index
+	
+    //GX_SetZMode      (GX_TRUE, GX_LEQUAL, GX_TRUE);
+    GX_SetColorUpdate(GX_TRUE);
+    GX_CopyDisp      (xfb[fb], GX_TRUE);
+	
+    VIDEO_SetNextFramebuffer(xfb[fb]);  // Select eXternal Frame Buffer
+    VIDEO_Flush();                      // Flush video buffer to screen
+    VIDEO_WaitVSync();                  // Wait for screen to update
+    // Interlaced screens require two frames to update
+    if (rmode->viTVMode &VI_NON_INTERLACE)  VIDEO_WaitVSync() ;
+	
+	/*
+	    fb ^= 1;  // Toggle framebuffer index
+	
+    
     GX_InvalidateTexAll();
 
     GX_SetColorUpdate(GX_TRUE);
     GX_CopyDisp      (xfb[fb], GX_TRUE);
 
 	//This code should be uncommented but somehow introduces all sorts of strange bugs.
-    //fb ^= 1;  // Toggle framebuffer index
 
+GX_DrawDone();          // Tell the GX engine we are done drawing
     VIDEO_SetNextFramebuffer(xfb[fb]);  // Select eXternal Frame Buffer
     VIDEO_Flush();                      // Flush video buffer to screen
     VIDEO_WaitVSync();                  // Wait for screen to update
     // Interlaced screens require two frames to update
-    if (rmode->viTVMode &VI_NON_INTERLACE)  VIDEO_WaitVSync() ;
+    if (rmode->viTVMode &VI_NON_INTERLACE)  VIDEO_WaitVSync() ;*/
 }
 
 /**
@@ -152,6 +170,7 @@ GX_Texture::~GX_Texture()
 {
 	free(buffer);
 }
+
 //#include "libpng/png.h"
 #include "libpng/pngu/pngu.h"
 GX_Texture* GX_Texture::LoadFromPNG(const void* png) {

@@ -126,7 +126,7 @@ void Viewer::InitializeScreen(int theWidth, int theHeight)
 	
 	min_zoom = MIN(log2f(SCREEN_HEIGHT / (float)height), log2f(SCREEN_WIDTH / (float)width));
 	
-	zoom_target = 0;
+	zoom_target = min_zoom;
 	zoom = zoom_target;
 
 	//Delete old ScreenParts (if any)
@@ -204,8 +204,8 @@ void Viewer::ScreenUpdateCallback(rfbClient* client, int x, int y, int w, int h)
 
 }
 
-#define SCREEN_XCENTER 320
-#define SCREEN_YCENTER 240
+#define SCREEN_XCENTER SCREEN_WIDTH / 2
+#define SCREEN_YCENTER SCREEN_HEIGHT / 2
 #include <math.h>
 
 //Converts pixeldistance on screen to pixeldistance on VNC display
@@ -254,16 +254,14 @@ void Viewer::Draw()
 
 void Viewer::Update()
 {
-	if(zoom_target <= min_zoom) {
-		//Don't drift of the edges of the display
-		int horizontal_margin = Screen2VNC((SCREEN_WIDTH) / 2);
-		int vertical_margin = Screen2VNC((SCREEN_HEIGHT) / 2);
+	//Don't drift of the edges of the display
+	int horizontal_margin = Screen2VNC(SCREEN_WIDTH / 3);
+	int vertical_margin = Screen2VNC(SCREEN_HEIGHT / 3);
 	
-		if(scrollto_x < horizontal_margin) scrollto_x = horizontal_margin;
-		if(scrollto_x > width - horizontal_margin) scrollto_x = width - horizontal_margin;
-		if(scrollto_y < vertical_margin) scrollto_y = vertical_margin;
-		if(scrollto_y > height - vertical_margin) scrollto_y = height - vertical_margin;
-	}
+	if(scrollto_x < horizontal_margin) scrollto_x = horizontal_margin;
+	if(scrollto_x > width - horizontal_margin) scrollto_x = width - horizontal_margin;
+	if(scrollto_y < vertical_margin) scrollto_y = vertical_margin;
+	if(scrollto_y > height - vertical_margin) scrollto_y = height - vertical_margin;
 
 	//Zoom animation
 	screen_x += (scrollto_x - screen_x) / 10;
@@ -286,7 +284,7 @@ void Viewer::SendCursorPosition(int x, int y)
 	struct Point point = Screen2VNCPoint(x, y);
 	cursor_x = point.x;
 	cursor_y = point.y;
-	SendPointerEvent(client, x,y, cursor_state);
+	SendPointerEvent(client, point.x,point.y, cursor_state);
 }
 
 void Viewer::SendLeftClick(bool down)

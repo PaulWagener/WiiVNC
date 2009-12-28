@@ -95,6 +95,7 @@ int main(int argc, char **argv) {
 					break;
 				case VNC_CONNECTED:
 					GX_Text("VNC verbonden...").Draw(100, 200);
+					viewer->SendCursorPosition(320, 240);
 					break;
 				case VNC_DISCONNECTED:
 					GX_Text("VNC niet verbonden...").Draw(100, 200);
@@ -124,7 +125,7 @@ int main(int argc, char **argv) {
 		//*
 		if(network_status == NETWORK_CONNECTED && viewer == NULL) {
 			printf("\n\n\n\n\n\n    Connecting to VNC...\n");
-			viewer = new Viewer("192.168.0.130", 5900, "wac");
+			viewer = new Viewer("192.168.0.128", 5900, "wac");
 		}
 		//*/
 
