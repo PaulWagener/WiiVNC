@@ -9,6 +9,11 @@
 #include <malloc.h>
 #include <ogcsys.h>
 
+#define SCREEN_WIDTH 640
+#define SCREEN_HEIGHT 480
+
+#define SCREEN_XCENTER SCREEN_WIDTH / 2
+#define SCREEN_YCENTER SCREEN_HEIGHT / 2
 
 /**
  * GX_Texture is a wrapper around the GXtexObj provided by Nintendo

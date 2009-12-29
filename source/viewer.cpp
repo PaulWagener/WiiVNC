@@ -15,7 +15,7 @@ Viewer::ScreenPart::ScreenPart(int theOffset_x, int theOffset_y, int theWidth, i
 Viewer *Viewer::instance = NULL;
 
 /**
- * Callback function for when
+ * Callback function for when a password is needed
  */
 char* Viewer::ReadPassword(rfbClient* client)
 {
@@ -61,14 +61,16 @@ Viewer::Viewer(const char* ip, int port, const char* newPassword)
 		throw "There can only be one viewer instance";
 		
 	instance = this;
+	this->status = VNC_CONNECTING;
 	password = newPassword;
 	width = 0;
 	height = 0;
 	screenparts = NULL;
+	keyboard = NULL;
 	num_screenparts = 0;
 	
-	cursor_x = 0;
-	cursor_y = 0;
+	cursor_x = SCREEN_XCENTER;
+	cursor_y = SCREEN_YCENTER;
 	cursor_state = 0;
 	
 	//Initialize the remote connetion
@@ -105,8 +107,7 @@ Viewer::~Viewer()
 	instance = NULL;
 }
 
-#define SCREEN_WIDTH 640
-#define SCREEN_HEIGHT 480
+
 
 #define SCREENPART_WIDTH 640
 #define SCREENPART_HEIGHT 480
@@ -121,9 +122,7 @@ void Viewer::InitializeScreen(int theWidth, int theHeight)
 	screen_y = height / 2;
 	scrollto_x = screen_x;
 	scrollto_y = screen_y;
-	
-	width = 1280;
-	
+		
 	min_zoom = MIN(log2f(SCREEN_HEIGHT / (float)height), log2f(SCREEN_WIDTH / (float)width));
 	
 	zoom_target = min_zoom;
@@ -204,8 +203,7 @@ void Viewer::ScreenUpdateCallback(rfbClient* client, int x, int y, int w, int h)
 
 }
 
-#define SCREEN_XCENTER SCREEN_WIDTH / 2
-#define SCREEN_YCENTER SCREEN_HEIGHT / 2
+
 #include <math.h>
 
 //Converts pixeldistance on screen to pixeldistance on VNC display
@@ -250,10 +248,41 @@ void Viewer::Draw()
 		
 		screenparts[i]->Draw(topleft.x, topleft.y, bottomright.x - topleft.x, bottomright.y - topleft.y);
 	}
+	if(keyboard)
+		keyboard->Draw();
 }
 
+bool closetozero(double var)
+{
+	return var > -0.001 && var < 0.001;
+}
+
+struct Viewer::Point zoomcursor;
+bool zooming_in = false;
+bool zooming_out = false;
+#define AUTOSCROLL_MARGIN 15
+#define ZOOM_SPEED 0.05
 void Viewer::Update()
 {
+	//Autoscrolling
+	if(cursor_x <  AUTOSCROLL_MARGIN) scrollto_x--;
+	if(cursor_x > SCREEN_WIDTH - AUTOSCROLL_MARGIN) scrollto_x++;
+	if(cursor_y <  AUTOSCROLL_MARGIN) scrollto_y--;
+	if(cursor_y > SCREEN_HEIGHT - AUTOSCROLL_MARGIN) scrollto_y++;
+	
+	//Zoom animation
+	if(zooming_in && zoom < max_zoom) {
+		zoom_target += ZOOM_SPEED;
+		struct Point cursorpoint = Screen2VNCPoint(cursor_x, cursor_y);
+		
+		scrollto_x += (cursorpoint.x - scrollto_x) / 40;
+		scrollto_y += (cursorpoint.y - scrollto_y) / 40;
+	}
+	
+	if(zooming_out && zoom > min_zoom) {
+		zoom_target -= ZOOM_SPEED;
+	}
+	
 	//Don't drift of the edges of the display
 	int horizontal_margin = Screen2VNC(SCREEN_WIDTH / 3);
 	int vertical_margin = Screen2VNC(SCREEN_HEIGHT / 3);
@@ -263,12 +292,23 @@ void Viewer::Update()
 	if(scrollto_y < vertical_margin) scrollto_y = vertical_margin;
 	if(scrollto_y > height - vertical_margin) scrollto_y = height - vertical_margin;
 
-	//Zoom animation
-	screen_x += (scrollto_x - screen_x) / 10;
-	screen_y += (scrollto_y - screen_y) / 10;
-    zoom += (zoom_target - zoom) / 10;
+#define ZOOM_SPEED 0.05
+
+
+	double scroll_x = (scrollto_x - screen_x) / 10;
+	double scroll_y = (scrollto_y - screen_y) / 10;
+	screen_x = scrollto_x;
+	screen_y = scrollto_y;
+
+	double zoom_diff = (zoom_target - zoom) / 10;
+    zoom += zoom_diff;
+	
+	//Make the pointer move if the display moves
+	if(!closetozero(scroll_x) || !closetozero(scroll_y) || !closetozero(zoom_diff))
+		SendPointer();
 }
 
+/*
 void Viewer::SendKeyDown(int key)
 {
 	SendKeyEvent(client, key, TRUE);
@@ -277,56 +317,118 @@ void Viewer::SendKeyDown(int key)
 void Viewer::SendKeyUp(int key)
 {
 	SendKeyEvent(client, key, FALSE);
+}*/
+
+#define LEFT_BUTTON		0x01
+#define MIDDLE_BUTTON	0x02
+#define RIGHT_BUTTON	0x04
+#define SCROLL_UP		0x08
+#define SCROLL_DOWN		0x10
+
+
+
+void Viewer::SendPointer()
+{
+	if(status == VNC_CONNECTED) {
+		struct Point cursor = Screen2VNCPoint(cursor_x, cursor_y);
+		SendPointerEvent(client, cursor.x, cursor.y, cursor_state);
+	}
 }
 
-void Viewer::SendCursorPosition(int x, int y)
+//Controller event handlers
+void Viewer::OnButton(bool isDown)
 {
-	struct Point point = Screen2VNCPoint(x, y);
-	cursor_x = point.x;
-	cursor_y = point.y;
-	SendPointerEvent(client, point.x,point.y, cursor_state);
+	if(isDown)
+		cursor_state |= LEFT_BUTTON;
+	else
+		cursor_state &= ~LEFT_BUTTON;
+	SendPointer();
 }
 
-void Viewer::SendLeftClick(bool down)
+void Viewer::OnMiddleButton(bool isDown)
 {
-	cursor_state = down ? 1 : 0;
-	SendPointerEvent(client, cursor_x, cursor_y, cursor_state);
+	if(isDown)
+		cursor_state |= MIDDLE_BUTTON;
+	else
+		cursor_state &= ~MIDDLE_BUTTON;
+	SendPointer();
 }
 
-void Viewer::SendRightClick(bool down)
+void Viewer::OnSecondaryButton(bool isDown)
 {
-	cursor_state = down ? 2 : 0;
-	SendPointerEvent(client, cursor_x, cursor_y, cursor_state);
+	if(isDown)
+		cursor_state |= RIGHT_BUTTON;
+	else
+		cursor_state &= ~RIGHT_BUTTON;
+	SendPointer();
 }
 
-void Viewer::SendMiddleClick(bool down)
+void Viewer::OnScrollUp()
 {
-	cursor_state = down ? 3 : 0;
-	SendPointerEvent(client, cursor_x, cursor_y, cursor_state);
+	cursor_state |= SCROLL_UP;
+	SendPointer();
+	cursor_state &= ~SCROLL_UP;
 }
 
-void Viewer::SendScrollDown()
+void Viewer::OnScrollDown()
 {
-	SendPointerEvent(client, cursor_x, cursor_y, 4);
+	cursor_state |= SCROLL_DOWN;
+	SendPointer();
+	cursor_state &= ~SCROLL_DOWN;
 }
 
-void Viewer::SendScrollUp()
+void Viewer::OnZoomIn(bool isDown)
 {
-	SendPointerEvent(client, cursor_x, cursor_y, 5);
-}
-
-void Viewer::ZoomIn()
-{
-	if(zoom_target < max_zoom)
+	if(zooming_in) {
+		zoomcursor = Screen2VNCPoint(cursor_x, cursor_y);
+		
+	}
+	zooming_in = isDown;
+	/*
+	if(zoom_target < max_zoom) {
+		struct Point point = Screen2VNCPoint(cursor_x, cursor_y);
+		scrollto_x = point.x;
+		scrollto_y = point.y;		
 		zoom_target++;
+	}*/
 }
 
-void Viewer::ZoomOut()
+void Viewer::OnZoomOut(bool isDown)
 {
+	zooming_out = isDown;
+	/*
 	if(zoom_target-1 <= min_zoom) {
 		zoom_target = min_zoom;
 		scrollto_x = width / 2;
 		scrollto_y = height / 2;
 	} else
-		zoom_target--;
+		zoom_target--;*/
+}
+
+void Viewer::OnHome()
+{
+	status = VNC_DISCONNECTED;
+}
+
+void Viewer::OnScrollView(int x, int y)
+{
+	scrollto_x += x;
+	scrollto_y -= y;
+}
+
+void Viewer::OnCursorMove(int x, int y)
+{
+	cursor_x = x;
+	cursor_y = y;
+	SendPointer();
+}
+
+void Viewer::OnKeyboard()
+{
+	if(keyboard == NULL) {
+		keyboard = new Keyboard();
+	} else {
+		delete keyboard;
+		keyboard = NULL;
+	}
 }

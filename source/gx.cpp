@@ -3,7 +3,6 @@
 void *xfb[2];
 int fb = 0;
 GXRModeObj *rmode;
-int gxfoo = 0;
 int GX_Initialize()
 {
 	Mtx GXmodelView2D;
@@ -108,7 +107,7 @@ int GX_Initialize()
     GX_SetAlphaCompare(GX_GREATER, 0, GX_AOP_AND, GX_ALWAYS, 0);
     GX_SetColorUpdate(GX_ENABLE);
     GX_SetCullMode(GX_CULL_NONE);
-        GX_SetClipMode( GX_CLIP_ENABLE );
+	GX_SetClipMode( GX_CLIP_ENABLE );
     GX_SetScissor( 0, 0, rmode->fbWidth, rmode->efbHeight );
     VIDEO_SetBlack(false);  // Enable video output
 	return 0;
@@ -116,38 +115,16 @@ int GX_Initialize()
 
 void GX_Render()
 {
-	GX_DrawDone();          // Tell the GX engine we are done drawing
-    GX_InvalidateTexAll();
+	GX_SetColorUpdate(GX_TRUE);
+	GX_CopyDisp(xfb[fb],GX_TRUE);
+	GX_DrawDone();
 	
-    fb ^= 1;  // Toggle framebuffer index
+	VIDEO_SetNextFramebuffer(xfb[fb]);
+	VIDEO_Flush();
+	VIDEO_WaitVSync();
+	fb ^= 1;		// Flip framebuffer
 	
-    //GX_SetZMode      (GX_TRUE, GX_LEQUAL, GX_TRUE);
-    GX_SetColorUpdate(GX_TRUE);
-    GX_CopyDisp      (xfb[fb], GX_TRUE);
-	
-    VIDEO_SetNextFramebuffer(xfb[fb]);  // Select eXternal Frame Buffer
-    VIDEO_Flush();                      // Flush video buffer to screen
-    VIDEO_WaitVSync();                  // Wait for screen to update
-    // Interlaced screens require two frames to update
-    if (rmode->viTVMode &VI_NON_INTERLACE)  VIDEO_WaitVSync() ;
-	
-	/*
-	    fb ^= 1;  // Toggle framebuffer index
-	
-    
-    GX_InvalidateTexAll();
-
-    GX_SetColorUpdate(GX_TRUE);
-    GX_CopyDisp      (xfb[fb], GX_TRUE);
-
-	//This code should be uncommented but somehow introduces all sorts of strange bugs.
-
-GX_DrawDone();          // Tell the GX engine we are done drawing
-    VIDEO_SetNextFramebuffer(xfb[fb]);  // Select eXternal Frame Buffer
-    VIDEO_Flush();                      // Flush video buffer to screen
-    VIDEO_WaitVSync();                  // Wait for screen to update
-    // Interlaced screens require two frames to update
-    if (rmode->viTVMode &VI_NON_INTERLACE)  VIDEO_WaitVSync() ;*/
+	GX_InvalidateTexAll(); // Fixes some texture garbles
 }
 
 /**
@@ -173,20 +150,29 @@ GX_Texture::~GX_Texture()
 
 //#include "libpng/png.h"
 #include "libpng/pngu/pngu.h"
+/**
+ * Load a texture from a PNG file
+ * The dimensions of the image MUST be a multiple of 4
+ */
 GX_Texture* GX_Texture::LoadFromPNG(const void* png) {
-    PNGUPROP imgProp;
-    IMGCTX ctx;
+	if(png == NULL) 
+		return NULL;
+	
+    PNGUPROP imgProp;	
+    IMGCTX ctx = PNGU_SelectImageFromBuffer(png);
+    PNGU_GetImageProperties(ctx, &imgProp);
+    u8* buffer = (u8*)memalign(32, imgProp.imgWidth * imgProp.imgHeight * 4);
 
-	u8* buffer = NULL;
-    if(png != NULL) {
-        ctx = PNGU_SelectImageFromBuffer(png);
-        PNGU_GetImageProperties(ctx, &imgProp);
-       	buffer = (u8*)memalign(32, imgProp.imgWidth * imgProp.imgHeight * 4);
-        if(buffer != NULL) {
-            PNGU_DecodeTo4x4RGBA8(ctx, imgProp.imgWidth, imgProp.imgHeight,buffer, 255);
-            PNGU_ReleaseImageContext(ctx);
-        }
-    }
+	if(buffer == NULL)
+		return NULL;
+	
+	int pngreturn = PNGU_DecodeTo4x4RGBA8(ctx, imgProp.imgWidth, imgProp.imgHeight, buffer, 255);
+    PNGU_ReleaseImageContext(ctx);
+	
+	if(pngreturn != PNGU_OK) {
+		free(buffer);
+		return NULL;
+	}
 	
 	GX_Texture *texture = new GX_Texture(imgProp.imgWidth, imgProp.imgHeight, GX_TF_RGBA8, buffer);
 	texture->Flush();

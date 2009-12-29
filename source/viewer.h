@@ -2,6 +2,8 @@
 #define ViewerH
 
 #include "gx.h"
+#include "keyboard.h"
+#include "controller.h"
 #include <rfb/rfbclient.h>
 
 enum ViewerStatus {VNC_CONNECTING, VNC_NEEDPASSWORD, VNC_CONNECTED, VNC_DISCONNECTED};
@@ -9,7 +11,7 @@ enum ViewerStatus {VNC_CONNECTING, VNC_NEEDPASSWORD, VNC_CONNECTED, VNC_DISCONNE
 /**
  *	Viewer class that takes care of the actual VNC part of this application
  */
-class Viewer {
+class Viewer : public ControllerListener {
 public:
 	Viewer(const char* ip, int port=5900, const char* password = NULL);
 	~Viewer();
@@ -54,6 +56,7 @@ public:
 	float scrollto_x, scrollto_y;
 	float screen_x, screen_y;
 	
+	Keyboard *keyboard;	
 	
 
 
@@ -65,19 +68,22 @@ public:
 	lwp_t inputsendthread_handle;
 
 	void InitializeScreen(int width, int height);
-	void SendKeyDown(int key);
-	void SendKeyUp(int key);
-	void SendCursorPosition(int x, int y);
-	void SendLeftClick(bool down);
-	void SendRightClick(bool down);
-	void SendMiddleClick(bool down);
-	void SendScrollDown();
-	void SendScrollUp();
 	void Draw();
 	void Update();
-	void ZoomIn();
-	void ZoomOut();
+	void OnButton(bool isDown);
+	void OnMiddleButton(bool isDown);
+	void OnSecondaryButton(bool isDown);
+	void OnScrollUp();
+	void OnScrollDown();
+	void OnZoomIn(bool isDown);
+	void OnZoomOut(bool isDown);
+	void OnHome();
+	void OnCursorMove(int x, int y);
+	void OnKeyboard();	
+	void OnScrollView(int x, int y);	
 	
+	
+	void SendPointer();
 	int cursor_x, cursor_y, cursor_state;
 public:
 	static void* BackgroundThread(void*);
