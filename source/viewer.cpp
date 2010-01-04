@@ -1,18 +1,13 @@
 #include "viewer.h"
 #include <rfb/rfbclient.h>
-#define PIXEL_SIZE 4
-#define TEXEL_SIZE 4 * 4 * 4
+
+Viewer *Viewer::instance = NULL;
 
 Viewer::ScreenPart::ScreenPart(int theOffset_x, int theOffset_y, int theWidth, int theHeight) : GX_Texture(theWidth, theHeight)
 {
 	offset_x = theOffset_x;
 	offset_y = theOffset_y;
 }
-
-
-
-
-Viewer *Viewer::instance = NULL;
 
 /**
  * Callback function for when a password is needed
@@ -21,6 +16,7 @@ char* Viewer::ReadPassword(rfbClient* client)
 {
 	if(instance->password == NULL)
 	{
+		//Wait until a password is given to us
 		instance->status = VNC_NEEDPASSWORD;
 			
 		while(instance->password == NULL)
@@ -33,7 +29,9 @@ char* Viewer::ReadPassword(rfbClient* client)
 	return strdup(instance->password);
 }
 
-
+/**
+ * Method that does all the actual networking with the server in the background
+ */
 void* Viewer::BackgroundThread(void* nothing)
 {
 	//Start the connection 
@@ -44,7 +42,7 @@ void* Viewer::BackgroundThread(void* nothing)
 	}
 	instance->status = VNC_CONNECTED;
 
-	//Keep recieving updates until the connection closes
+	//Keep recieving various updates until the connection closes
 	while(1) {
 		if(!HandleRFBServerMessage(instance->client)) {
 			instance->status = VNC_DISCONNECTED;
@@ -65,6 +63,8 @@ Viewer::Viewer(const char* ip, int port, const char* newPassword)
 	password = newPassword;
 	width = 0;
 	height = 0;
+	zooming_in = false;
+	zooming_out = false;
 	screenparts = NULL;
 	keyboard = NULL;
 	num_screenparts = 0;
@@ -107,21 +107,20 @@ Viewer::~Viewer()
 	instance = NULL;
 }
 
-
-
-#define SCREENPART_WIDTH 640
-#define SCREENPART_HEIGHT 480
-
-#include <math.h>
-#define hdiv(x,div)    (x/div + (x%div ? 1 : 0)) //Rounding up division
-void Viewer::InitializeScreen(int theWidth, int theHeight)
+ViewerStatus Viewer::GetStatus()
 {
-	width = theWidth;
-	height = theHeight;
-	screen_x = width / 2;
-	screen_y = height / 2;
-	scrollto_x = screen_x;
-	scrollto_y = screen_y;
+	return status;
+}
+
+
+void Viewer::InitializeScreen(int width, int height)
+{
+	this->width = width;
+	this->height = height;
+	scrollto_x = width / 2;
+	scrollto_y = height / 2;
+	screen_x = scrollto_x;
+	screen_y = scrollto_y;
 		
 	min_zoom = MIN(log2f(SCREEN_HEIGHT / (float)height), log2f(SCREEN_WIDTH / (float)width));
 	
@@ -137,6 +136,8 @@ void Viewer::InitializeScreen(int theWidth, int theHeight)
 		free(screenparts);
 		screenparts = NULL;
 	}
+
+	#define hdiv(x,div)    (x/div + (x%div ? 1 : 0)) //Rounding up division
 	
 	//Create new ScreenParts
 	int num_horizontal = hdiv(width, SCREENPART_WIDTH);
@@ -157,6 +158,12 @@ void Viewer::InitializeScreen(int theWidth, int theHeight)
 	
 }
 
+#define PIXEL_SIZE 4
+#define TEXEL_SIZE 4 * 4 * 4
+
+/**
+ * Callback for every time the a rectangle of the screen is changed
+ */ 
 void Viewer::ScreenUpdateCallback(rfbClient* client, int x, int y, int w, int h)
 {
 	//Adapt to changing screen resolution (also used for first initialization)
@@ -203,9 +210,6 @@ void Viewer::ScreenUpdateCallback(rfbClient* client, int x, int y, int w, int h)
 
 }
 
-
-#include <math.h>
-
 //Converts pixeldistance on screen to pixeldistance on VNC display
 int Viewer::Screen2VNC(int pixels) {
 	return pixels / powf(2, zoom);
@@ -240,6 +244,7 @@ struct Viewer::Point Viewer::VNC2ScreenPoint(int x, int y)
 
 void Viewer::Draw()
 {
+	//Draws all textures making up the screen
 	int i;
 	for(i = 0; i < num_screenparts; i++)
 	{
@@ -248,23 +253,24 @@ void Viewer::Draw()
 		
 		screenparts[i]->Draw(topleft.x, topleft.y, bottomright.x - topleft.x, bottomright.y - topleft.y);
 	}
+	
+	//Draw keyboard
 	if(keyboard)
 		keyboard->Draw();
 }
+
+
+#define AUTOSCROLL_MARGIN 15
+#define ZOOM_SPEED 0.05
 
 bool closetozero(double var)
 {
 	return var > -0.001 && var < 0.001;
 }
 
-struct Viewer::Point zoomcursor;
-bool zooming_in = false;
-bool zooming_out = false;
-#define AUTOSCROLL_MARGIN 15
-#define ZOOM_SPEED 0.05
 void Viewer::Update()
 {
-	//Autoscrolling
+	//Autoscrolling if the cursor is at the screen edge
 	if(cursor_x <  AUTOSCROLL_MARGIN) scrollto_x--;
 	if(cursor_x > SCREEN_WIDTH - AUTOSCROLL_MARGIN) scrollto_x++;
 	if(cursor_y <  AUTOSCROLL_MARGIN) scrollto_y--;
@@ -275,15 +281,16 @@ void Viewer::Update()
 		zoom_target += ZOOM_SPEED;
 		struct Point cursorpoint = Screen2VNCPoint(cursor_x, cursor_y);
 		
-		scrollto_x += (cursorpoint.x - scrollto_x) / 40;
-		scrollto_y += (cursorpoint.y - scrollto_y) / 40;
+		//While zooming move towards the cursor
+		scrollto_x += (cursorpoint.x - scrollto_x) / 20;
+		scrollto_y += (cursorpoint.y - scrollto_y) / 20;
 	}
 	
 	if(zooming_out && zoom > min_zoom) {
 		zoom_target -= ZOOM_SPEED;
 	}
 	
-	//Don't drift of the edges of the display
+	//Don't drift off the edges of the display
 	int horizontal_margin = Screen2VNC(SCREEN_WIDTH / 3);
 	int vertical_margin = Screen2VNC(SCREEN_HEIGHT / 3);
 	
@@ -292,40 +299,20 @@ void Viewer::Update()
 	if(scrollto_y < vertical_margin) scrollto_y = vertical_margin;
 	if(scrollto_y > height - vertical_margin) scrollto_y = height - vertical_margin;
 
-#define ZOOM_SPEED 0.05
 
-
-	double scroll_x = (scrollto_x - screen_x) / 10;
-	double scroll_y = (scrollto_y - screen_y) / 10;
-	screen_x = scrollto_x;
-	screen_y = scrollto_y;
+	//Smoothly move the screen
+	double scrolldiff_x = (scrollto_x - screen_x) / 10;
+	double scrolldiff_y = (scrollto_y - screen_y) / 10;
+	screen_x += scrolldiff_x;
+	screen_y += scrolldiff_y;
 
 	double zoom_diff = (zoom_target - zoom) / 10;
     zoom += zoom_diff;
 	
 	//Make the pointer move if the display moves
-	if(!closetozero(scroll_x) || !closetozero(scroll_y) || !closetozero(zoom_diff))
+	if(!closetozero(scrolldiff_x) || !closetozero(scrolldiff_y) || !closetozero(zoom_diff))
 		SendPointer();
 }
-
-/*
-void Viewer::SendKeyDown(int key)
-{
-	SendKeyEvent(client, key, TRUE);
-}
-
-void Viewer::SendKeyUp(int key)
-{
-	SendKeyEvent(client, key, FALSE);
-}*/
-
-#define LEFT_BUTTON		0x01
-#define MIDDLE_BUTTON	0x02
-#define RIGHT_BUTTON	0x04
-#define SCROLL_UP		0x08
-#define SCROLL_DOWN		0x10
-
-
 
 void Viewer::SendPointer()
 {
@@ -379,30 +366,13 @@ void Viewer::OnScrollDown()
 
 void Viewer::OnZoomIn(bool isDown)
 {
-	if(zooming_in) {
-		zoomcursor = Screen2VNCPoint(cursor_x, cursor_y);
 		
-	}
 	zooming_in = isDown;
-	/*
-	if(zoom_target < max_zoom) {
-		struct Point point = Screen2VNCPoint(cursor_x, cursor_y);
-		scrollto_x = point.x;
-		scrollto_y = point.y;		
-		zoom_target++;
-	}*/
 }
 
 void Viewer::OnZoomOut(bool isDown)
 {
 	zooming_out = isDown;
-	/*
-	if(zoom_target-1 <= min_zoom) {
-		zoom_target = min_zoom;
-		scrollto_x = width / 2;
-		scrollto_y = height / 2;
-	} else
-		zoom_target--;*/
 }
 
 void Viewer::OnHome()

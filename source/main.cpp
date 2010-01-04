@@ -19,9 +19,7 @@ network_status network_status = NO_NETWORK;
 s32 ip;
 void* init_network(void*)
 {
-	printf("\n\nhello\n");
 	network_status = NETWORK_CONNECTING;
-	printf("    sdf\n");
     while ((ip = net_init()) == -EAGAIN) {
 		usleep(100 * 1000); //100ms
 		printf(".");
@@ -39,7 +37,6 @@ void* init_network(void*)
 	}
 	
 	network_status = NETWORK_CONNECTED;
-	printf("Connected\n");
 	return 0;
 }
 
@@ -52,20 +49,20 @@ int main(int argc, char **argv) {
 	Viewer *viewer = NULL;
 
 	Controller cursor = Controller();
-	Keyboard keyboard = Keyboard();
+	//Keyboard keyboard = Keyboard();
 	LWP_CreateThread(&initnetworkthread, init_network, NULL, NULL, 0, 80);
 	while(1) {
 		
 		cursor.Update();
-		keyboard.Update();
-		keyboard.Draw();
+		//keyboard.Update();
+		//keyboard.Draw();
 
 		if(viewer != NULL)
 		{
 			viewer->Update();
 			viewer->Draw();
 			//*
-			switch(viewer->status)
+			switch(viewer->GetStatus())
 			{
 				case VNC_CONNECTING:
 					GX_Text("VNC verbinden...").Draw(100, 200);
@@ -79,10 +76,13 @@ int main(int argc, char **argv) {
 				case VNC_DISCONNECTED:
 					GX_Text("VNC niet verbonden...").Draw(100, 200);
 					break;
+				case VNC_USERQUITTED:
+					GX_Text("Gebruiker is weer terug...").Draw(100, 200);
+					break;
 			}
 			//*/
 			
-			if(viewer->status == VNC_DISCONNECTED) {
+			if(viewer->GetStatus() == VNC_DISCONNECTED) {
 				delete viewer;
 				exit(0);
 			}
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
 		if(network_status == NETWORK_CONNECTED && viewer == NULL) {
 			printf("\n\n\n\n\n\n    Connecting to VNC...\n");
 			viewer = new Viewer("192.168.0.128", 5900, "wac");
-			cursor.listener = viewer;
+			cursor.SetListener(viewer);
 		}
 		//*/
 
