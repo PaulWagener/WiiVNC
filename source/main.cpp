@@ -60,9 +60,7 @@ int main(int argc, char **argv) {
 	Viewer *viewer = NULL;
 
 	Controller controller = Controller();
-	Keyboard::controller = &controller;
-	//Keyboard keyboard = Keyboard();
-	//controller.SetKeyboard(&keyboard);
+	
 	
 	LWP_CreateThread(&initnetworkthread, init_network, NULL, NULL, 0, 80);
 	while(1) {
@@ -72,8 +70,9 @@ int main(int argc, char **argv) {
 		}
 		
 		controller.Update();
-		//keyboard.Update();
-		//keyboard.Draw();
+		
+			
+		
 
 		if(viewer != NULL)
 		{

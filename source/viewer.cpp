@@ -66,7 +66,8 @@ Viewer::Viewer(const char* ip, int port, const char* newPassword)
 	zooming_in = false;
 	zooming_out = false;
 	screenparts = NULL;
-	keyboard = NULL;
+	keyboard = new Keyboard();
+	keyboard->SetListener(this);
 	num_screenparts = 0;
 	
 	cursor_x = SCREEN_XCENTER;
@@ -262,7 +263,6 @@ void Viewer::Draw()
 }
 
 
-#define AUTOSCROLL_MARGIN 15
 #define ZOOM_SPEED 0.05
 
 bool closetozero(double var)
@@ -272,12 +272,6 @@ bool closetozero(double var)
 
 void Viewer::Update()
 {
-	//Autoscrolling if the cursor is at the screen edge
-	if(cursor_x <  AUTOSCROLL_MARGIN) scrollto_x--;
-	if(cursor_x > SCREEN_WIDTH - AUTOSCROLL_MARGIN) scrollto_x++;
-	if(cursor_y <  AUTOSCROLL_MARGIN) scrollto_y--;
-	if(cursor_y > SCREEN_HEIGHT - AUTOSCROLL_MARGIN) scrollto_y++;
-	
 	//Zoom animation
 	if(zooming_in && zoom < max_zoom) {
 		zoom_target += ZOOM_SPEED;
@@ -406,12 +400,11 @@ void Viewer::OnCursorMove(int x, int y)
 
 void Viewer::OnKeyboard()
 {
-	if(keyboard == NULL) {
-		keyboard = new Keyboard();
-		keyboard->SetListener(this);
+	if(keyboard->Visible())
+	{
+		keyboard->Hide();
 	} else {
-		delete keyboard;
-		keyboard = NULL;
+		keyboard->Show();
 	}
 }
 

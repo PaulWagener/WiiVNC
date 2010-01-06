@@ -21,11 +21,13 @@ Controller::Controller() :
 	cursor_texture(GX_Texture::LoadFromPNG(cursor_default)),
 	keyboard(NULL)
 {
+	Keyboard::controller = this;
+	
 	//Init controllers
 	PAD_Init();
 	WPAD_Init();
-	WPAD_SetDataFormat(WPAD_CHAN_0, WPAD_FMT_BTNS_ACC_IR);
-	WPAD_SetVRes(WPAD_CHAN_0, SCREEN_WIDTH, SCREEN_HEIGHT);
+	WPAD_SetDataFormat(WPAD_CHAN_ALL, WPAD_FMT_BTNS_ACC_IR);
+	WPAD_SetVRes(WPAD_CHAN_ALL, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	MOUSE_Init();
 }
@@ -49,6 +51,7 @@ u8 usb_oldbutton = 0;
 void Controller::Update()
 {
 	bool onKeyboard = keyboard != NULL && keyboard->IsMouseOver(x, y); //TODO
+	ControllerListener *focus_listener = onKeyboard ? keyboard : listener; //Buttonpresses may be intercepted by the on-screen keyboard
 	previous_x = x;
 	previous_y = y;
 
@@ -78,50 +81,54 @@ void Controller::Update()
 	
 	//Wii controller
 	WPAD_ScanPads();
-	WPADData *wd = WPAD_Data(WPAD_CHAN_0);
+	for(int i = 0; i < WPAD_MAX_WIIMOTES; i++) {
+		WPADData *data = WPAD_Data(i);
 	
-	if(wd->err == WPAD_ERR_NONE) {
-		if(wd->ir.num_dots > 0) {
-			x = wd->ir.x;
-			y = wd->ir.y;
+		if(data->err != WPAD_ERR_NONE)
+			continue;
+		
+		if(data->ir.num_dots > 0) {
+			x = data->ir.x;
+			y = data->ir.y;
 		}
 	
-		int wpad_down = wd->btns_d;
-		int wpad_up = wd->btns_u;
+		int wpad_down = data->btns_d;
+		int wpad_up = data->btns_u;
+		int wpad_held = data->btns_h;
 		
-		ControllerListener *l = onKeyboard ? keyboard : listener; //Buttonpresses may be intercepted by the on-screen keyboard
-		if(l != NULL) {
-			if(wpad_down & WPAD_BUTTON_A) l->OnButton(true);
-			if(wpad_up & WPAD_BUTTON_A) l->OnButton(false);
-			if(wpad_down & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) l->OnMiddleButton(true);
-			if(wpad_up & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) l->OnMiddleButton(false);
-			if(wpad_down & WPAD_BUTTON_B) l->OnSecondaryButton(true);
-			if(wpad_up & WPAD_BUTTON_B) l->OnSecondaryButton(false);
+		if(focus_listener != NULL) {
+			if(wpad_down & WPAD_BUTTON_A) focus_listener->OnButton(true);
+			if(wpad_up & WPAD_BUTTON_A) focus_listener->OnButton(false);
+			if(wpad_down & WPAD_BUTTON_B) focus_listener->OnSecondaryButton(true);
+			if(wpad_up & WPAD_BUTTON_B) focus_listener->OnSecondaryButton(false);
 		}
 			
-		
 		if(listener != NULL) {
-			if(wpad_down & WPAD_BUTTON_UP) listener->OnScrollUp();
-			if(wpad_down & WPAD_BUTTON_DOWN) listener->OnScrollDown();
-			
+			if(wpad_held & WPAD_BUTTON_1) {
+				if(wpad_down & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) focus_listener->OnMiddleButton(true);
+				if(wpad_up & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) focus_listener->OnMiddleButton(false);			
+				if(wpad_down & WPAD_BUTTON_UP) listener->OnScrollUp();
+				if(wpad_down & WPAD_BUTTON_DOWN) listener->OnScrollDown();
+			} else {
+				#define WPAD_SCROLLSPEED 10
+				int cx = 0, cy = 0;
+				if(wpad_held & WPAD_BUTTON_UP) cy += WPAD_SCROLLSPEED;
+				if(wpad_held & WPAD_BUTTON_DOWN) cy -= WPAD_SCROLLSPEED;
+				if(wpad_held & WPAD_BUTTON_LEFT) cx -= WPAD_SCROLLSPEED;
+				if(wpad_held & WPAD_BUTTON_RIGHT) cx += WPAD_SCROLLSPEED;
+				if(cx != 0 || cy != 0)
+					listener->OnScrollView(cx, cy);	
+				
+			}
+		
 			if(wpad_down & WPAD_BUTTON_PLUS) listener->OnZoomIn(true);
 			if(wpad_up & WPAD_BUTTON_PLUS) listener->OnZoomIn(false);
 			if(wpad_down & WPAD_BUTTON_MINUS) listener->OnZoomOut(true);
 			if(wpad_up & WPAD_BUTTON_MINUS) listener->OnZoomOut(false);		
-			
+		
 			if(wpad_down & WPAD_BUTTON_HOME) listener->OnHome();
-			
-			if(wpad_down & WPAD_BUTTON_1) listener->OnKeyboard();
-			
-			//Scroll the view with the Nunchuk
-			WPADData *data = WPAD_Data(WPAD_CHAN_0);
-			
-			if(data->exp.type == WPAD_EXP_NUNCHUK) {
-				int cx = data->exp.nunchuk.js.mag * 10;
-				int cy = data->exp.nunchuk.js.ang * 10;
-				if(cx != 0 || cy != 0)
-					listener->OnScrollView(cx, cy);	
-			}
+		
+			if(wpad_down & WPAD_BUTTON_2) listener->OnKeyboard();
 		}
 	}
 	 //*/
@@ -149,14 +156,13 @@ void Controller::Update()
 		
 
 		//Button event handlers
-		ControllerListener *l = onKeyboard ? keyboard : listener; //Buttonpresses may be intercepted by the on-screen keyboard
-		if(l != NULL) {
-			if(pad_down & PAD_BUTTON_A) l->OnButton(true);
-			if(pad_up & PAD_BUTTON_A) l->OnButton(false);
-			if(pad_down & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) l->OnMiddleButton(true);
-			if(pad_up & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) l->OnMiddleButton(false);
-			if(pad_down & PAD_BUTTON_B) l->OnSecondaryButton(true);
-			if(pad_up & PAD_BUTTON_B) l->OnSecondaryButton(false);
+		if(focus_listener != NULL) {
+			if(pad_down & PAD_BUTTON_A) focus_listener->OnButton(true);
+			if(pad_up & PAD_BUTTON_A) focus_listener->OnButton(false);
+			if(pad_down & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) focus_listener->OnMiddleButton(true);
+			if(pad_up & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) focus_listener->OnMiddleButton(false);
+			if(pad_down & PAD_BUTTON_B) focus_listener->OnSecondaryButton(true);
+			if(pad_up & PAD_BUTTON_B) focus_listener->OnSecondaryButton(false);
 		}
 		
 		if(listener != NULL) {

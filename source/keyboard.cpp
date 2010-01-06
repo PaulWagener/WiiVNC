@@ -10,13 +10,13 @@ Controller *Keyboard::controller = NULL;
 
 void KeyboardListener::OnKey(int keycode, bool isDown) {}
 
-Button::Button(Keyboard *theKeyboard, const char* theText, int x, int y) :
+Button::Button(Keyboard *theKeyboard, const struct key key, int x, int y) :
 	x(x),
 	y(y),
-	text(theText),
 	keyboard(theKeyboard),
 	texture(keyboard->buttonTexture),
-	text_texture(GX_Text(text, 30, 0)),
+	key(key),
+	text_texture( GX_Text( (char[2]){key.ch, '\0'} , 20, 0) ),
 	visible(true),
 	hover(false),
 	grow(0)
@@ -38,15 +38,17 @@ void Button::Update()
 		grow -= GROW_SPEED;
 }
 
+#define HOVER_COLOR 0xbec3d6
+#define CLICK_COLOR 0xf7f726
 void Button::Draw()
 {
 	if(visible) {
 		texture->Draw(keyboard->position_x + x - grow, keyboard->position_y + y - grow,
-					  texture->width + grow*2, texture->height + grow*2);
+					  texture->width + grow*2, texture->height + grow*2, keyboard->opacity, hover ? HOVER_COLOR : 0xFFFFFF);
 	
 		
-		text_texture.Draw(keyboard->position_x + x + (texture->width/2 - 10) - grow, keyboard->position_y + y - grow,
-						text_texture.width + grow*30, text_texture.height + grow*3);
+		text_texture.Draw(keyboard->position_x + x + (texture->width/2 - 7) - grow, keyboard->position_y + y - grow,
+						text_texture.width + grow*30, text_texture.height + grow*3, keyboard->opacity);
 								  
 	}
 }
@@ -58,8 +60,14 @@ bool Button::IsMouseOver(int mouse_x, int mouse_y) {
 
 bool keyboard_inited = false;
 #include <wiikeyboard/keyboard.h>
+
+
+
 Keyboard::Keyboard()
 {
+	opacity = 0;
+	show = false;
+	
 	if(!keyboard_inited) {
 		KEYBOARD_Init(NULL);
 		keyboard_inited = true;
@@ -68,28 +76,91 @@ Keyboard::Keyboard()
 	controller->SetKeyboard(this);
 	
 	listener = NULL;
-	position_x = 10;
-	position_y = 100;
+	position_x = 40;
+	position_y = 300;
 	buttonTexture = GX_Texture::LoadFromPNG(button);
 	texture = GX_Texture::LoadFromPNG(keyboard_tex);
 	
 	for(int i = 0; i < NUM_BUTTONS; i++)
 		Buttons[i] = NULL;	
 
-	static const char*const keys[] = {
-		"q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]"
+	const int row_pos[][2] = {
+		{0,0},
+		{60, 32},
+		{70, 64},
+		{90, 96},
 	};
+	const struct key keys[][13] = {
+	{
+		{'`','~'},
+		{'1','!'},
+		{'2','@'},
+		{'3','#'},
+		{'4','$'},
+		{'5','%'},
+		{'6','^'},
+		{'7','&'},
+		{'8','*'},
+		{'9','('},
+		{'0',')'},
+		{'-','_'},
+		{'=','+'}
+	},
+	{
+		{'q','Q'},
+		{'w','W'},
+		{'e','E'},
+		{'r','R'},
+		{'t','T'},
+		{'y','Y'},
+		{'u','U'},
+		{'i','I'},
+		{'o','O'},
+		{'p','P'},
+		{'[','{'},
+		{']','}'},
+		{'\\', '|'}
+	},
+	{
+		{'a', 'A'},
+		{'s', 'S'},
+		{'d', 'D'},
+		{'f', 'F'},
+		{'g', 'G'},
+		{'h', 'H'},
+		{'j', 'J'},
+		{'k', 'K'},
+		{'l', 'L'},
+		{';', ':'},
+		{'\'', '"'}
+	},
+	{
+		{'z', 'Z'},
+		{'x', 'X'},
+		{'c', 'C'},
+		{'v', 'V'},
+		{'b', 'B'},
+		{'n', 'N'},
+		{'m', 'M'},
+		{',', '<'},
+		{'.', '>'},
+		{'/', '?'}
+	}};
 	
-	/*static const char*const keys2[] = {
-		"a", "s", "d", "f", "h", "j", "k", "l"
-	};*/
-	
-	static const int x_start = 27;
-	static const int x_delta = 47;
-	static const int i_start = 0;
-	int y = 37;
-	for (unsigned int i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i)
-		Buttons[i + i_start] = new Button(this, keys[i], x_start + i * x_delta, y);
+	int b = 0;
+	for(unsigned int row = 0; row < sizeof(keys) / sizeof(keys[0]); row++) {
+		int x = row_pos[row][0];
+		int y = row_pos[row][1];
+		
+		//Create a row of buttons
+		for (unsigned int i = 0; i < sizeof(keys[row]) / sizeof(keys[row][0]); ++i) {
+			if(keys[row][i].ch != '\0')
+			   Buttons[b++] = new Button(this, keys[row][i], x, y);
+			
+			x += buttonTexture->width;
+		}
+	}
+		
 	
 }
 
@@ -176,11 +247,34 @@ u16 keycodeToVNC(u16 keycode) {
 	}
 	return keycode;
 }
-					
-					
+
+#define KEYBOARD_APPEAR_SPEED 20
+#define KEYBOARD_DISAPPEAR_SPEED 35
+
+bool Keyboard::Visible()
+{
+	return opacity > 0;
+}
+
+void Keyboard::Show()
+{
+	show = true;
+}
+
+void Keyboard::Hide()
+{
+	show = false;
+}
+
 
 void Keyboard::Update()
 {
+	if(show && opacity < 255) opacity += KEYBOARD_APPEAR_SPEED;
+	if(!show && opacity > 0) opacity -= KEYBOARD_DISAPPEAR_SPEED;
+	
+	if(opacity > 255) opacity = 255;
+	if(opacity < 0) opacity = 0;
+	
 	for(int i = 0; i < NUM_BUTTONS; i++)
 		if(Buttons[i] != NULL)
 			Buttons[i]->Update();
@@ -207,12 +301,13 @@ Button *hoverButton = NULL;
 
 void Keyboard::Draw()
 {
-	texture->Draw(position_x, position_y);
+	//texture->Draw(position_x, position_y, -1, -1, opacity);
+	
 	for(int i = 0; i < NUM_BUTTONS; i++)
-		if(Buttons[i] != NULL && !Buttons[i]->hover)
+		if(Buttons[i] != NULL)
 			Buttons[i]->Draw();
 
-	if(hoverButton)
+	if(hoverButton && opacity == 255)
 		hoverButton->Draw();
 }
 
@@ -244,7 +339,7 @@ void Keyboard::OnButton(bool isDown)
 	if(listener != NULL) {
 		for(int i = 0; i < NUM_BUTTONS; i++) {
 			if(Buttons[i] != NULL && Buttons[i]->IsMouseOver(cursor_x, cursor_y)) {
-				listener->OnKey(Buttons[i]->text[0], isDown);
+				listener->OnKey(Buttons[i]->key.ch, isDown);
 				return;
 			}
 		}

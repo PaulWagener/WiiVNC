@@ -187,7 +187,7 @@ GX_Texture* GX_Texture::LoadFromPNG(const void* png) {
  * Opacity is a value from 0 (transparent) to 255 (opaque), defaults to 255
  * TODO: implement rotation
  */
-void GX_Texture::Draw(int x, int y, int drawWidth, int drawHeight, int opacity, int rotation)
+void GX_Texture::Draw(int x, int y, int drawWidth, int drawHeight, int opacity, int color)
 {
 	if(drawWidth==-1) drawWidth = width;
 	if(drawHeight==-1) drawHeight = height;
@@ -196,22 +196,22 @@ void GX_Texture::Draw(int x, int y, int drawWidth, int drawHeight, int opacity, 
 	GX_SetTevOp  (GX_TEVSTAGE0, GX_MODULATE);
 	GX_SetVtxDesc(GX_VA_TEX0,   GX_DIRECT);
 		
-	u32 color = 0xFFFFFF00 | opacity;
+	u32 gxcolor = color << 8 | opacity;
 	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
 		GX_Position3f32(x, y, 0);
-		GX_Color1u32   (color);
+		GX_Color1u32   (gxcolor);
 		GX_TexCoord2f32(0, 0);
 
         GX_Position3f32(x+drawWidth, y, 0);
-        GX_Color1u32   (color);
+        GX_Color1u32   (gxcolor);
         GX_TexCoord2f32(1, 0);
 
         GX_Position3f32(x+drawWidth, y+drawHeight, 0);
-        GX_Color1u32   (color);
+        GX_Color1u32   (gxcolor);
         GX_TexCoord2f32(1, 1);
 
         GX_Position3f32(x, y+drawHeight, 0);
-        GX_Color1u32   (color);
+        GX_Color1u32   (gxcolor);
         GX_TexCoord2f32(0, 1);
     GX_End();
 

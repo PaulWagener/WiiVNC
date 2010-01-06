@@ -29,7 +29,7 @@ public:
 
 	GX_Texture(int width=0, int height=0, u8 format=GX_TF_RGBA8, u8* buffer=NULL);
 	~GX_Texture();
-	void Draw(int x, int y, int width=-1, int height=-1, int opacity=255, int degrees=0);
+	void Draw(int x, int y, int width=-1, int height=-1, int opacity=255, int color=0xFFFFFF);
 	void Flush();
 	
 	static GX_Texture* LoadFromPNG(const void* png);

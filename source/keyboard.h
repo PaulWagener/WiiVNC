@@ -5,19 +5,25 @@
 #include "controller.h"
 class Keyboard;
 
+struct key {
+	const char ch;
+	const char ucase_ch;
+};
+
 class Button {
 public:
 	int x, y, width, height;
-	const char* text;
+
 	Keyboard *keyboard;
 	GX_Texture *texture;
+	struct key key;
 	GX_Texture text_texture;
 	bool visible;
 	
 	bool hover;
 	int grow;
 	
-	Button(Keyboard *keyboard, const char* text, int x, int y);
+	Button(Keyboard *keyboard, const struct key key, int x, int y);
 	~Button();
 	void Update();
 	void Draw();
@@ -33,6 +39,9 @@ public:
 #define NUM_BUTTONS 100
 class Keyboard : public ControllerListener {
 public:
+	int opacity;
+	bool show;
+	
 	static Controller *controller;
 	int position_x, position_y;
 	
@@ -43,8 +52,11 @@ public:
 	KeyboardListener *listener;
 	Keyboard();
 	~Keyboard();
-	void Update();
 	void Draw();
+	void Update();
+	void Show();
+	void Hide();
+	bool Visible();
 	void OnCursorMove(int x, int y);
 	bool IsMouseOver(int x, int y);
 	void SetListener(KeyboardListener *listener);
