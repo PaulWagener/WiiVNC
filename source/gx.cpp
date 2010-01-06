@@ -145,7 +145,8 @@ GX_Texture::GX_Texture(int newWidth, int newHeight, u8 newFormat, u8* newBuffer)
 
 GX_Texture::~GX_Texture()
 {
-	free(buffer);
+	if(buffer != NULL)
+		free(buffer);
 }
 
 //#include "libpng/png.h"

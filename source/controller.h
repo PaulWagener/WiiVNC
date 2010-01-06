@@ -5,6 +5,8 @@
 #include "gfx/cursor_default.h"
 #include <wiiuse/wpad.h>
 
+class Keyboard;
+
 /**
  * The ControllerListener is the interface classes have to implement
  * in order to recieve callbacks from the user
@@ -36,6 +38,7 @@ public:
 	void Update();
 	void Draw();
 	void SetListener(ControllerListener *listener);
+	void SetKeyboard(Keyboard *keyboard);
 private:
 	//Current cursor location
 	int x, y;
@@ -43,13 +46,16 @@ private:
 	//Previous cursor location
 	int previous_x, previous_y;
 	
-	//Texture of the cursor
-	GX_Texture *texture;
-	
 	//Current object that gets controller updates
-	ControllerListener *listener;	
+	ControllerListener *listener;
+	
+	//Texture of the cursor
+	GX_Texture *cursor_texture;
+	
+	Keyboard *keyboard;
 };
 
+#include "keyboard.h"
 
 
 #endif

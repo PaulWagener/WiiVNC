@@ -27,7 +27,7 @@ public:
 	//Texture buffer in the specified format
 	u8* buffer;
 
-	GX_Texture(int width, int height, u8 format=GX_TF_RGBA8, u8* buffer=NULL);
+	GX_Texture(int width=0, int height=0, u8 format=GX_TF_RGBA8, u8* buffer=NULL);
 	~GX_Texture();
 	void Draw(int x, int y, int width=-1, int height=-1, int opacity=255, int degrees=0);
 	void Flush();

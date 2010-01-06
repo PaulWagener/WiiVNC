@@ -26,7 +26,7 @@ enum ViewerStatus {
 /**
  *	Viewer class that takes care of the actual VNC part of this application
  */
-class Viewer : public ControllerListener {
+class Viewer : public ControllerListener, public KeyboardListener {
 public:
 	Viewer(const char* ip, int port=5900, const char* password = NULL);
 	~Viewer();
@@ -45,7 +45,9 @@ public:
 	void OnHome();
 	void OnCursorMove(int x, int y);
 	void OnKeyboard();	
-	void OnScrollView(int x, int y);	
+	void OnScrollView(int x, int y);
+	
+	void OnKey(int keycode, bool isDown);
 		
 	const char* password;
 private:

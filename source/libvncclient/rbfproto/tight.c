@@ -88,7 +88,7 @@ static rfbBool DecompressJpegRectBPP(rfbClient* client, int x, int y, int w, int
 
 /* Definitions */
 
-static rfbBool
+/*static*/ rfbBool
 HandleTightBPP (rfbClient* client, int rx, int ry, int rw, int rh)
 {
   CARDBPP fill_colour;

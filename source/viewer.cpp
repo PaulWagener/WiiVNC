@@ -112,6 +112,8 @@ ViewerStatus Viewer::GetStatus()
 	return status;
 }
 
+//How much border there is between screenedge and vnc in most zoomedout state
+#define ZOOMEDOUT_MARGIN 40
 
 void Viewer::InitializeScreen(int width, int height)
 {
@@ -122,7 +124,7 @@ void Viewer::InitializeScreen(int width, int height)
 	screen_x = scrollto_x;
 	screen_y = scrollto_y;
 		
-	min_zoom = MIN(log2f(SCREEN_HEIGHT / (float)height), log2f(SCREEN_WIDTH / (float)width));
+	min_zoom = MIN(log2f(SCREEN_HEIGHT-ZOOMEDOUT_MARGIN / (float)height), log2f((SCREEN_WIDTH-ZOOMEDOUT_MARGIN) / (float)width));
 	
 	zoom_target = min_zoom;
 	zoom = zoom_target;
@@ -286,8 +288,15 @@ void Viewer::Update()
 		scrollto_y += (cursorpoint.y - scrollto_y) / 20;
 	}
 	
-	if(zooming_out && zoom > min_zoom) {
+	if(zooming_out && zoom_target > min_zoom) {
 		zoom_target -= ZOOM_SPEED;
+		
+	}
+	
+	//Snap back to center if zoomied all the way back
+	if(zooming_out && zoom_target <= min_zoom) {
+	   scrollto_x = width/2;
+	   scrollto_y = height/2;
 	}
 	
 	//Don't drift off the edges of the display
@@ -312,6 +321,9 @@ void Viewer::Update()
 	//Make the pointer move if the display moves
 	if(!closetozero(scrolldiff_x) || !closetozero(scrolldiff_y) || !closetozero(zoom_diff))
 		SendPointer();
+	
+	if(keyboard)
+		keyboard->Update();
 }
 
 void Viewer::SendPointer()
@@ -365,8 +377,7 @@ void Viewer::OnScrollDown()
 }
 
 void Viewer::OnZoomIn(bool isDown)
-{
-		
+{		
 	zooming_in = isDown;
 }
 
@@ -397,8 +408,13 @@ void Viewer::OnKeyboard()
 {
 	if(keyboard == NULL) {
 		keyboard = new Keyboard();
+		keyboard->SetListener(this);
 	} else {
 		delete keyboard;
 		keyboard = NULL;
 	}
+}
+
+void Viewer::OnKey(int keycode, bool isDown) {
+	SendKeyEvent(client,keycode, isDown);
 }

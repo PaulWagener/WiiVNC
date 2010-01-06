@@ -231,9 +231,9 @@ static rfbBool HandleZlib8(rfbClient* client, int rx, int ry, int rw, int rh);
 static rfbBool HandleZlib16(rfbClient* client, int rx, int ry, int rw, int rh);
 static rfbBool HandleZlib32(rfbClient* client, int rx, int ry, int rw, int rh);
 #ifdef LIBVNCSERVER_HAVE_LIBJPEG
-static rfbBool HandleTight8(rfbClient* client, int rx, int ry, int rw, int rh);
-static rfbBool HandleTight16(rfbClient* client, int rx, int ry, int rw, int rh);
-static rfbBool HandleTight32(rfbClient* client, int rx, int ry, int rw, int rh);
+/*static*/ rfbBool HandleTight8(rfbClient* client, int rx, int ry, int rw, int rh);
+/*static*/ rfbBool HandleTight16(rfbClient* client, int rx, int ry, int rw, int rh);
+/*static*/ rfbBool HandleTight32(rfbClient* client, int rx, int ry, int rw, int rh);
 
 static long ReadCompactLen (rfbClient* client);
 
@@ -346,7 +346,7 @@ DefaultSupportedMessagesTightVNC(rfbClient* client)
     SetServer2Client(client, rfbTextChat);
 }
 
-static rfbBool
+/*static*/ rfbBool
 IsUnixSocket(const char *name)
 {
   struct stat sb;
@@ -363,7 +363,6 @@ rfbBool
 ConnectToRFBServer(rfbClient* client,const char *hostname, int port)
 {
   unsigned int host;
-	printf("HALLLLO\n");
   if (client->serverPort==-1) {
     /* serverHost is a file recorded by vncrec. */
     const char* magic="vncLog0.0";

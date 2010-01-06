@@ -13,12 +13,23 @@
 #include "viewer.h"
 #include "freetype.h"
 #include "controller.h"
+#include "keyboard.h"
+
+u8 HWButton;
+void WiiResetPressed() { HWButton = SYS_RETURNTOMENU; }
+void WiiPowerPressed() { HWButton = SYS_POWEROFF_STANDBY;}
+void WiimotePowerPressed(s32 chan) { HWButton = SYS_POWEROFF_STANDBY; }
+
 enum network_status {NO_NETWORK, NETWORK_CONNECTING, NETWORK_CONNECTED};
 network_status network_status = NO_NETWORK;
 
 s32 ip;
 void* init_network(void*)
 {
+	SYS_SetResetCallback(WiiResetPressed);
+	SYS_SetPowerCallback(WiiPowerPressed);
+	WPAD_SetPowerButtonCallback(WiimotePowerPressed);
+	
 	network_status = NETWORK_CONNECTING;
     while ((ip = net_init()) == -EAGAIN) {
 		usleep(100 * 1000); //100ms
@@ -48,12 +59,19 @@ int main(int argc, char **argv) {
 	GX_InitFreetype();
 	Viewer *viewer = NULL;
 
-	Controller cursor = Controller();
+	Controller controller = Controller();
+	Keyboard::controller = &controller;
 	//Keyboard keyboard = Keyboard();
+	//controller.SetKeyboard(&keyboard);
+	
 	LWP_CreateThread(&initnetworkthread, init_network, NULL, NULL, 0, 80);
 	while(1) {
+		if(HWButton) {
+			SYS_ResetSystem(HWButton, 0, 0);
+			return 0;
+		}
 		
-		cursor.Update();
+		controller.Update();
 		//keyboard.Update();
 		//keyboard.Draw();
 
@@ -110,11 +128,12 @@ int main(int argc, char **argv) {
 		if(network_status == NETWORK_CONNECTED && viewer == NULL) {
 			printf("\n\n\n\n\n\n    Connecting to VNC...\n");
 			viewer = new Viewer("192.168.0.128", 5900, "wac");
-			cursor.SetListener(viewer);
+			//keyboard.SetListener(viewer);
+			controller.SetListener(viewer);
 		}
 		//*/
 
-		cursor.Draw();
+		controller.Draw();
 	
 		GX_Render();
 		

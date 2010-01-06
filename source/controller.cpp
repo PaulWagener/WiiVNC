@@ -13,37 +13,70 @@ void ControllerListener::OnCursorMove(int x, int y) {}
 void ControllerListener::OnKeyboard() {}
 void ControllerListener::OnScrollView(int x, int y) {}
 
-
-Controller::Controller()
+#include <ogc/usbmouse.h>
+Controller::Controller() :
+	x(SCREEN_XCENTER),
+	y(SCREEN_YCENTER),
+	listener(NULL),
+	cursor_texture(GX_Texture::LoadFromPNG(cursor_default)),
+	keyboard(NULL)
 {
-	x = SCREEN_XCENTER;
-	y = SCREEN_YCENTER;
-	listener = NULL;
-	texture = GX_Texture::LoadFromPNG(cursor_default);
-	
 	//Init controllers
 	PAD_Init();
-	
 	WPAD_Init();
 	WPAD_SetDataFormat(WPAD_CHAN_0, WPAD_FMT_BTNS_ACC_IR);
 	WPAD_SetVRes(WPAD_CHAN_0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
+	MOUSE_Init();
 }
 
 Controller::~Controller()
 {
-	delete texture;
+	delete cursor_texture;
+	MOUSE_Deinit();
 }
 
 PADStatus pads[PAD_CHANMAX];
 #include <stdlib.h>
+
+u8 usb_oldbutton = 0;
+
+#define USB_LEFTBUTTON		0x01
+#define USB_RIGHTBUTTON		0x02
+#define USB_MIDDLEBUTTON	0x04
+
+
 void Controller::Update()
 {
+	bool onKeyboard = keyboard != NULL && keyboard->IsMouseOver(x, y); //TODO
 	previous_x = x;
 	previous_y = y;
+
+	//USB Mouse
+	if(MOUSE_IsConnected()) {
+		mouse_event event;
+		while(MOUSE_GetEvent(&event)) {
+			x += event.rx;
+			y += event.ry;
+			
+			if(listener != NULL)
+			{
+				u8 up = usb_oldbutton & ~event.button;
+				u8 down = event.button & (event.button ^ usb_oldbutton);
+				
+				if(down & USB_LEFTBUTTON) listener->OnButton(true);
+				if(up & USB_LEFTBUTTON) listener->OnButton(false);
+				if(down & USB_MIDDLEBUTTON) listener->OnMiddleButton(true);
+				if(up & USB_MIDDLEBUTTON) listener->OnMiddleButton(false);
+				if(down & USB_RIGHTBUTTON) listener->OnSecondaryButton(true);
+				if(up & USB_RIGHTBUTTON) listener->OnSecondaryButton(false);
+			}
+			
+			usb_oldbutton = event.button;
+		}
+	}
 	
 	//Wii controller
-	
 	WPAD_ScanPads();
 	WPADData *wd = WPAD_Data(WPAD_CHAN_0);
 	
@@ -56,14 +89,18 @@ void Controller::Update()
 		int wpad_down = wd->btns_d;
 		int wpad_up = wd->btns_u;
 		
-		if(listener != NULL) {
-			if(wpad_down & WPAD_BUTTON_A) listener->OnButton(true);
-			if(wpad_up & WPAD_BUTTON_A) listener->OnButton(false);
-			if(wpad_down & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) listener->OnMiddleButton(true);
-			if(wpad_up & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) listener->OnMiddleButton(false);
-			if(wpad_down & WPAD_BUTTON_B) listener->OnSecondaryButton(true);
-			if(wpad_up & WPAD_BUTTON_B) listener->OnSecondaryButton(false);
+		ControllerListener *l = onKeyboard ? keyboard : listener; //Buttonpresses may be intercepted by the on-screen keyboard
+		if(l != NULL) {
+			if(wpad_down & WPAD_BUTTON_A) l->OnButton(true);
+			if(wpad_up & WPAD_BUTTON_A) l->OnButton(false);
+			if(wpad_down & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) l->OnMiddleButton(true);
+			if(wpad_up & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) l->OnMiddleButton(false);
+			if(wpad_down & WPAD_BUTTON_B) l->OnSecondaryButton(true);
+			if(wpad_up & WPAD_BUTTON_B) l->OnSecondaryButton(false);
+		}
 			
+		
+		if(listener != NULL) {
 			if(wpad_down & WPAD_BUTTON_UP) listener->OnScrollUp();
 			if(wpad_down & WPAD_BUTTON_DOWN) listener->OnScrollDown();
 			
@@ -89,7 +126,6 @@ void Controller::Update()
 	}
 	 //*/
 
-	
 	//GC Controller
 	PAD_ScanPads();
 	
@@ -103,22 +139,27 @@ void Controller::Update()
 		//Move the cursor with the big stick
 		x += PAD_StickX(controller) / 10;
 		y -= PAD_StickY(controller) / 10;
+		
 
 		int pad_down = PAD_ButtonsDown(controller);
-		int pad_up = PAD_ButtonsUp(controller);		
+		int pad_up = PAD_ButtonsUp(controller);
 
-		if(pad_down & PAD_BUTTON_START) exit(0);
+		//TODO: remove this
+		if(listener == NULL && pad_down & PAD_BUTTON_START) exit(0);
 		
+
+		//Button event handlers
+		ControllerListener *l = onKeyboard ? keyboard : listener; //Buttonpresses may be intercepted by the on-screen keyboard
+		if(l != NULL) {
+			if(pad_down & PAD_BUTTON_A) l->OnButton(true);
+			if(pad_up & PAD_BUTTON_A) l->OnButton(false);
+			if(pad_down & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) l->OnMiddleButton(true);
+			if(pad_up & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) l->OnMiddleButton(false);
+			if(pad_down & PAD_BUTTON_B) l->OnSecondaryButton(true);
+			if(pad_up & PAD_BUTTON_B) l->OnSecondaryButton(false);
+		}
 		
 		if(listener != NULL) {
-			//Button event handlers
-			if(pad_down & PAD_BUTTON_A) listener->OnButton(true);
-			if(pad_up & PAD_BUTTON_A) listener->OnButton(false);
-			if(pad_down & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) listener->OnMiddleButton(true);
-			if(pad_up & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) listener->OnMiddleButton(false);
-			if(pad_down & PAD_BUTTON_B) listener->OnSecondaryButton(true);
-			if(pad_up & PAD_BUTTON_B) listener->OnSecondaryButton(false);
-			
 			if(pad_down & PAD_BUTTON_UP) listener->OnScrollUp();
 			if(pad_down & PAD_BUTTON_DOWN) listener->OnScrollDown();
 			
@@ -147,8 +188,9 @@ void Controller::Update()
 	if(y < 0) y = 0;
 	if(y > SCREEN_HEIGHT) y = SCREEN_HEIGHT;
 	
-	if(listener != NULL && (x != previous_x || y != previous_y))
-		listener->OnCursorMove(x, y);
+	ControllerListener *l = onKeyboard ? keyboard : listener;
+	if(l != NULL && (x != previous_x || y != previous_y))
+		l->OnCursorMove(x, y);
 
 }
 
@@ -157,7 +199,12 @@ void Controller::SetListener(ControllerListener *listener)
 	this->listener = listener;
 }
 
+void Controller::SetKeyboard(Keyboard *keyboard)
+{
+	this->keyboard = keyboard;
+}
+
 void Controller::Draw()
 {
-	texture->Draw(x, y);
+	cursor_texture->Draw(x, y);
 }
