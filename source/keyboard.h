@@ -5,29 +5,85 @@
 #include "controller.h"
 class Keyboard;
 
-struct key {
+#define VNC_HOME		0xff50
+#define VNC_LEFT		0xff51
+#define VNC_UP			0xff52
+#define VNC_RIGHT		0xff53
+#define VNC_DOWN		0xff54
+#define VNC_PAGE_UP		0xff55
+#define VNC_PAGE_DOWN	0xff56
+#define VNC_END			0xff57
+#define VNC_INSERT		0xff63
+#define VNC_F1			0xffbe
+#define VNC_F2			0xffbf
+#define VNC_F3			0xffc0
+#define VNC_F4			0xffc1
+#define VNC_F5			0xffc2
+#define VNC_F6			0xffc3
+#define VNC_F7			0xffc4
+#define VNC_F8			0xffc5
+#define VNC_F9			0xffc6
+#define VNC_F10			0xffc7
+#define VNC_F11			0xffc8
+#define VNC_F12			0xffc9
+#define VNC_BACKSPACE	0xff08
+#define VNC_TAB			0xff09
+#define VNC_ENTER		0xff0d
+#define VNC_ESCAPE		0xff1b
+#define VNC_LEFTSHIFT	0xffe1 
+#define VNC_RIGHTSHIFT	0xffe2 
+#define VNC_CTRLLEFT	0xffe3 
+#define VNC_CTRLRIGHT	0xffe4 
+#define VNC_METALEFT	0xffe7 
+#define VNC_METARIGHT	0xffe8 
+#define VNC_ALTLEFT		0xffe9 
+#define VNC_ALTRIGHT	0xffea 
+
+
+struct ch_key {
 	const char ch;
 	const char ucase_ch;
 };
 
-class Button {
+class Key {
 public:
-	int x, y, width, height;
+	int x, y, width;
 
 	Keyboard *keyboard;
-	GX_Texture *texture;
-	struct key key;
-	GX_Texture text_texture;
-	bool visible;
-	
+
 	bool hover;
-	int grow;
+	u8 grow;
+	u8 click_fade; // 0 = no color, 255 = CLICK_COLOR
 	
-	Button(Keyboard *keyboard, const struct key key, int x, int y);
-	~Button();
+	Key(Keyboard *keyboard, int x, int y, int width);
+	~Key();
 	void Update();
-	void Draw();
+	virtual void Draw();
+	virtual u32 GetBaseColor()=0;
+	
 	bool IsMouseOver(int x, int y);
+	virtual u16 GetKeyCode()=0;
+};
+
+class CharacterKey : public Key {
+public:
+	struct ch_key key;
+	GX_Texture lowercase_texture;
+	GX_Texture uppercase_texture;
+	CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key);
+	void Draw();
+	u16 GetKeyCode();
+	u32 GetBaseColor();
+};
+
+class CommandKey : public Key {
+public:
+	GX_Texture text_texture;
+	int key_code;
+	CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code);
+	void Draw();
+	u32 GetBaseColor();
+	u16 GetKeyCode();
 };
 
 class KeyboardListener {
@@ -36,20 +92,20 @@ public:
 };
 
 
-#define NUM_BUTTONS 100
+#define NUM_KEYS 100
 class Keyboard : public ControllerListener {
 public:
+	KeyboardListener *listener;
 	int opacity;
 	bool show;
 	
 	static Controller *controller;
 	int position_x, position_y;
 	
-	Button *Buttons[NUM_BUTTONS];
+	Key *Keys[NUM_KEYS];
 	
-	GX_Texture *texture;
 	GX_Texture *buttonTexture;
-	KeyboardListener *listener;
+
 	Keyboard();
 	~Keyboard();
 	void Draw();
@@ -61,5 +117,6 @@ public:
 	bool IsMouseOver(int x, int y);
 	void SetListener(KeyboardListener *listener);
 	void OnButton(bool isDown);
+	bool IsVisible();
 };
 #endif

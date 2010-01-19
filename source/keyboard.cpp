@@ -7,30 +7,38 @@
 #define	BUTTON_GROW_MAX 5
 
 Controller *Keyboard::controller = NULL;
+#define HOVER_COLOR 0xbec3d6
+#define CLICK_COLOR 0xf7f726
+#define COMMAND_COLOR 0xAEE9FA
+#define COMMAND_TEXT_COLOR 0x475F66
+
+int cursor_x = 0, cursor_y = 0;
 
 void KeyboardListener::OnKey(int keycode, bool isDown) {}
 
-Button::Button(Keyboard *theKeyboard, const struct key key, int x, int y) :
+/**
+ * Key class
+ */
+
+
+Key::Key(Keyboard *theKeyboard, int x, int y, int width) :
 	x(x),
 	y(y),
+	width(width),
 	keyboard(theKeyboard),
-	texture(keyboard->buttonTexture),
-	key(key),
-	text_texture( GX_Text( (char[2]){key.ch, '\0'} , 20, 0) ),
-	visible(true),
 	hover(false),
 	grow(0)
 {
 	return;
 }
 
-Button::~Button()
+Key::~Key()
 {
 }
 	
 
 #define GROW_SPEED 2
-void Button::Update()
+void Key::Update()
 {
 	if(hover && grow < BUTTON_GROW_MAX)
 		grow += GROW_SPEED;
@@ -38,23 +46,22 @@ void Button::Update()
 		grow -= GROW_SPEED;
 }
 
-#define HOVER_COLOR 0xbec3d6
-#define CLICK_COLOR 0xf7f726
-void Button::Draw()
+/**
+ * Draws the generic key background
+ */
+void Key::Draw()
 {
-	if(visible) {
-		texture->Draw(keyboard->position_x + x - grow, keyboard->position_y + y - grow,
-					  texture->width + grow*2, texture->height + grow*2, keyboard->opacity, hover ? HOVER_COLOR : 0xFFFFFF);
+	u32 color = hover ? HOVER_COLOR : this->GetBaseColor();
 	
-		
-		text_texture.Draw(keyboard->position_x + x + (texture->width/2 - 7) - grow, keyboard->position_y + y - grow,
-						text_texture.width + grow*30, text_texture.height + grow*3, keyboard->opacity);
-								  
-	}
+	GX_Texture *texture = keyboard->buttonTexture;
+	texture->Draw(keyboard->position_x + x - grow, keyboard->position_y + y - grow,
+				  width + grow*2, texture->height + grow*2, keyboard->opacity, color);
 }
 
-bool Button::IsMouseOver(int mouse_x, int mouse_y) {
-	return	keyboard->position_x + x < mouse_x && mouse_x < keyboard->position_x + x + texture->width &&
+bool Key::IsMouseOver(int mouse_x, int mouse_y) {
+	GX_Texture *texture = keyboard->buttonTexture;
+	
+	return	keyboard->position_x + x < mouse_x && mouse_x < keyboard->position_x + x + width &&
 			keyboard->position_y + y < mouse_y && mouse_y < keyboard->position_y + y + texture->height;
 }
 
@@ -62,35 +69,105 @@ bool keyboard_inited = false;
 #include <wiikeyboard/keyboard.h>
 
 
-
-Keyboard::Keyboard()
+/**
+ Character Key
+*/
+u16 CharacterKey::GetKeyCode()
 {
-	opacity = 0;
-	show = false;
+	return key.ch;
+}
+
+CharacterKey::CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key)
+: Key(keyboard, x, y, keyboard->buttonTexture->width),
+key(key),
+lowercase_texture( GX_Text( (char[2]){key.ch, '\0'} , 20, 0) ),
+uppercase_texture( GX_Text( (char[2]){key.ucase_ch, '\0'} , 20, 0) )
+{
 	
+}
+
+void CharacterKey::Draw()
+{
+	Key::Draw();
+	
+	GX_Texture *texture = keyboard->buttonTexture;
+	lowercase_texture.Draw(keyboard->position_x + x + (texture->width/2 - 7) - grow, keyboard->position_y + y - grow,
+				  lowercase_texture.width + grow*30, lowercase_texture.height + grow*3, keyboard->opacity);
+}
+
+u32 CharacterKey::GetBaseColor()
+{
+	return 0xFFFFFFFF;
+}
+
+
+
+
+/**
+ Command Key
+ */
+
+CommandKey::CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code)
+: Key(keyboard, x, y, width),
+	text_texture(GX_Text( text, 14, COMMAND_TEXT_COLOR)),
+	key_code(key_code)
+{
+}
+
+void CommandKey::Draw()
+{
+	Key::Draw();
+	
+	GX_Texture *texture = keyboard->buttonTexture;
+	text_texture.Draw(keyboard->position_x + x + (texture->width/2 - 7) - grow, keyboard->position_y + y - grow,
+						   text_texture.width + grow*30, text_texture.height + grow*3, keyboard->opacity);
+}
+
+u32 CommandKey::GetBaseColor()
+{
+	return COMMAND_COLOR;
+}
+
+u16 CommandKey::GetKeyCode()
+{
+	return key_code;				
+}
+
+
+
+
+/**
+ Keyboard
+*/
+
+Keyboard::Keyboard() :
+	listener(NULL),
+	opacity(0),
+	position_x(40),
+	position_y(300),
+	buttonTexture(GX_Texture::LoadFromPNG(button))
+{
+	//Initialize 
 	if(!keyboard_inited) {
 		KEYBOARD_Init(NULL);
 		keyboard_inited = true;
 	}
 	
+	//Notify the controller that this is the latest keyboard
+	//(used for ignoring mouse movements above keyboard)
 	controller->SetKeyboard(this);
 	
-	listener = NULL;
-	position_x = 40;
-	position_y = 300;
-	buttonTexture = GX_Texture::LoadFromPNG(button);
-	texture = GX_Texture::LoadFromPNG(keyboard_tex);
-	
-	for(int i = 0; i < NUM_BUTTONS; i++)
-		Buttons[i] = NULL;	
+	for(int i = 0; i < NUM_KEYS; i++)
+		Keys[i] = NULL;	
 
+	//Initialize a US layout keyboard
 	const int row_pos[][2] = {
 		{0,0},
 		{60, 32},
 		{70, 64},
 		{90, 96},
 	};
-	const struct key keys[][13] = {
+	const struct ch_key keys[][13] = {
 	{
 		{'`','~'},
 		{'1','!'},
@@ -155,60 +232,37 @@ Keyboard::Keyboard()
 		//Create a row of buttons
 		for (unsigned int i = 0; i < sizeof(keys[row]) / sizeof(keys[row][0]); ++i) {
 			if(keys[row][i].ch != '\0')
-			   Buttons[b++] = new Button(this, keys[row][i], x, y);
+			   Keys[b++] = new CharacterKey(this, x, y, keys[row][i]);
 			
 			x += buttonTexture->width;
 		}
 	}
-		
+	//Special extra wide space key
+	struct ch_key space_ch = {' ', ' '};
+	Key *spaceKey = new CharacterKey(this, 150, 128, space_ch);
+	spaceKey->width = 160;
+	Keys[b++] = spaceKey;
+	
+	//Command Keys
+	Keys[b++] = new CommandKey(this, 0, 32, 60, "tab", VNC_TAB);
+	Keys[b++] = new CommandKey(this, 0, 64, 80, "capslock", VNC_TAB);
+	Keys[b++] = new CommandKey(this, 0, 96, 90, "shift", VNC_LEFTSHIFT);
+	
 	
 }
 
 Keyboard::~Keyboard() {
 	
-	for(int i = 0; i < NUM_BUTTONS; i++)
-		if(Buttons[i] != NULL)
-			delete Buttons[i];
+	for(int i = 0; i < NUM_KEYS; i++)
+		if(Keys[i] != NULL)
+			delete Keys[i];
 
-	delete texture;
 	delete buttonTexture;
 	controller->SetKeyboard(NULL);
 }
 
-#define VNC_HOME		0xff50
-#define VNC_LEFT		0xff51
-#define VNC_UP			0xff52
-#define VNC_RIGHT		0xff53
-#define VNC_DOWN		0xff54
-#define VNC_PAGE_UP		0xff55
-#define VNC_PAGE_DOWN	0xff56
-#define VNC_END			0xff57
-#define VNC_INSERT		0xff63
-#define VNC_F1			0xffbe
-#define VNC_F2			0xffbf
-#define VNC_F3			0xffc0
-#define VNC_F4			0xffc1
-#define VNC_F5			0xffc2
-#define VNC_F6			0xffc3
-#define VNC_F7			0xffc4
-#define VNC_F8			0xffc5
-#define VNC_F9			0xffc6
-#define VNC_F10			0xffc7
-#define VNC_F11			0xffc8
-#define VNC_F12			0xffc9
-#define VNC_BACKSPACE	0xff08
-#define VNC_TAB			0xff09
-#define VNC_ENTER		0xff0d
-#define VNC_ESCAPE		0xff1b
-#define VNC_LEFTSHIFT	0xffe1 
-#define VNC_RIGHTSHIFT	0xffe2 
-#define VNC_CTRLLEFT	0xffe3 
-#define VNC_CTRLRIGHT	0xffe4 
-#define VNC_METALEFT	0xffe7 
-#define VNC_METARIGHT	0xffe8 
-#define VNC_ALTLEFT		0xffe9 
-#define VNC_ALTRIGHT	0xffea 
-					
+	
+u16 gkeycode = 0;
 u16 keycodeToVNC(u16 keycode) {
 	switch(keycode) {
 		case KS_Home:		return VNC_HOME;
@@ -244,6 +298,35 @@ u16 keycodeToVNC(u16 keycode) {
 		case KS_Meta_R:		return VNC_METARIGHT;
 		case KS_Alt_L:		return VNC_ALTLEFT;
 		case KS_Alt_R:		return VNC_ALTRIGHT;
+		
+		//US Localization (row 1)
+		case KS_at:			return '`';
+		case KS_section:	return '~';
+		case KS_quotedbl:	return '@';
+		case KS_ampersand:	return '^';
+		case KS_underscore:	return '&';
+		case KS_parenleft:	return '*';
+		case KS_parenright:	return '(';
+		case KS_apostrophe:	return ')';
+		case KS_slash:		return '-';
+		case KS_question:	return '_';
+		case KS_degree:		return '=';
+		
+		//US Localization (row 2)
+		case KS_asterisk:	return ']';
+		case KS_bar:		return '}';
+		case KS_less:		return '\\';
+		case KS_greater:	return '|';
+		
+		//US Localization (row 3)
+		case KS_plus:		return ';';
+		case KS_plusminus:	return ':';	
+			
+		//US Localization (row 4)
+		case KS_semicolon:	return '<';
+		case KS_colon:		return '>';
+		case KS_minus:		return '/';
+		case KS_equal:		return '?';
 	}
 	return keycode;
 }
@@ -255,14 +338,24 @@ bool Keyboard::Visible()
 {
 	return opacity > 0;
 }
+Key *hoverButton = NULL;
 
 void Keyboard::Show()
 {
+	for(int i = 0; i < NUM_KEYS; i++) {
+		if(Keys[i] != NULL && Keys[i]->IsMouseOver(cursor_x, cursor_y)) {
+		   Keys[i]->hover = true;
+		   hoverButton = Keys[i];
+		}
+	}
 	show = true;
 }
 
 void Keyboard::Hide()
 {
+	for(int i = 0; i < NUM_KEYS; i++)
+		if(Keys[i] != NULL)
+			Keys[i]->hover = false;
 	show = false;
 }
 
@@ -275,9 +368,9 @@ void Keyboard::Update()
 	if(opacity > 255) opacity = 255;
 	if(opacity < 0) opacity = 0;
 	
-	for(int i = 0; i < NUM_BUTTONS; i++)
-		if(Buttons[i] != NULL)
-			Buttons[i]->Update();
+	for(int i = 0; i < NUM_KEYS; i++)
+		if(Keys[i] != NULL)
+			Keys[i]->Update();
 	
 	//Send keys pressed by a USB keyboard
 	keyboard_event ke;
@@ -291,39 +384,45 @@ void Keyboard::Update()
 		} else {
 			continue;
 		}
+		
+		gkeycode = ke.keycode;
 
 		if(listener != NULL)
 			listener->OnKey(keycodeToVNC(ke.symbol), isDown);
 	}
 
 }
-Button *hoverButton = NULL;
 
 void Keyboard::Draw()
 {
-	//texture->Draw(position_x, position_y, -1, -1, opacity);
+	if(opacity == 0)
+		return;
 	
-	for(int i = 0; i < NUM_BUTTONS; i++)
-		if(Buttons[i] != NULL)
-			Buttons[i]->Draw();
+	//TODO: Temporary debug code
+	char temp[100];
+	sprintf(temp, "0x%x", gkeycode);
+	GX_Text(temp, 40, 0xFFFFFFFF).Draw(30,30);
+	
+	//Draw all the keys
+	for(int i = 0; i < NUM_KEYS; i++)
+		if(Keys[i] != NULL)
+			Keys[i]->Draw();
 
-	if(hoverButton && opacity == 255)
+	if(hoverButton && IsVisible())
 		hoverButton->Draw();
 }
 
-int cursor_x = 0, cursor_y = 0;
 
 void Keyboard::OnCursorMove(int x, int y)
 {
 	cursor_x = x;
 	cursor_y = y;
 	hoverButton = NULL;
-	for(int i = 0; i < NUM_BUTTONS; i++) {
-		if(Buttons[i] != NULL) {
-			Buttons[i]->hover = Buttons[i]->IsMouseOver(x, y);
-			if(Buttons[i]->hover)
-				hoverButton = Buttons[i];
-			 
+	for(int i = 0; i < NUM_KEYS; i++) {
+		if(Keys[i] != NULL) {
+			Keys[i]->hover = Keys[i]->IsMouseOver(x, y);
+			if(Keys[i]->hover)
+				hoverButton = Keys[i];			 
 		}
 	}
 }
@@ -334,12 +433,16 @@ void Keyboard::SetListener(KeyboardListener *listener)
 }
 
 #include <wiikeyboard/wsksymdef.h>
+
+/**
+ * User clicks on a button with his pointer
+ */
 void Keyboard::OnButton(bool isDown)
 {
 	if(listener != NULL) {
-		for(int i = 0; i < NUM_BUTTONS; i++) {
-			if(Buttons[i] != NULL && Buttons[i]->IsMouseOver(cursor_x, cursor_y)) {
-				listener->OnKey(Buttons[i]->key.ch, isDown);
+		for(int i = 0; i < NUM_KEYS; i++) {
+			if(Keys[i] != NULL && Keys[i]->IsMouseOver(cursor_x, cursor_y)) {
+				listener->OnKey(Keys[i]->GetKeyCode(), isDown);
 				return;
 			}
 		}
@@ -349,6 +452,18 @@ void Keyboard::OnButton(bool isDown)
 
 bool Keyboard::IsMouseOver(int x, int y)
 {
-	return	position_x < x && x < position_x + texture->width &&
-			position_y < y && y < position_y + texture->height;
+	if(!IsVisible())
+		return false;
+
+	for(int i = 0; i < NUM_KEYS; i++)
+	{
+		if(Keys[i] != NULL && Keys[i]->IsMouseOver(x, y))
+			return true;
+	}
+	return false;
+}
+
+bool Keyboard::IsVisible()
+{
+	return opacity >= 255;
 }
