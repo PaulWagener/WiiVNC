@@ -32,8 +32,7 @@ Key::Key(Keyboard *theKeyboard, int x, int y, int width) :
 	grow(0),
 	click_fade(0),
 	pressed_counter(0),
-	pressed(false),
-	sticky(false)
+	pressed(false)
 {
 	return;
 }
@@ -56,7 +55,7 @@ void Key::Update()
 	if(click_fade > 0) click_fade -= CLICKFADE_SPEED;
 	else click_fade = 0;
 	
-	if(!sticky && pressed) {
+	if(pressed) {
 		pressed_counter++;
 		
 		if(pressed_counter > PRESS_DELAY && pressed_counter % PRESS_REPEAT == 0)
@@ -69,6 +68,7 @@ void Key::Trigger()
 	click_fade = 255;
 	if(keyboard->listener != NULL) {
 		keyboard->listener->OnKey(GetKeyCode(), true);
+		keyboard->listener->OnKey(GetKeyCode(), false);
 	}
 }
 	
@@ -98,6 +98,9 @@ void Key::Draw()
 				  width + grow*2, texture->height + grow*2, keyboard->opacity, color);
 }
 
+/**
+ * Determine if the mouse is hovering over this key
+ */
 bool Key::IsMouseOver(int mouse_x, int mouse_y) {
 	GX_Texture *texture = keyboard->buttonTexture;
 	
@@ -105,6 +108,9 @@ bool Key::IsMouseOver(int mouse_x, int mouse_y) {
 			keyboard->position_y + y < mouse_y && mouse_y < keyboard->position_y + y + texture->height;
 }
 
+/**
+ * Simulates a press on this key
+ */
 void Key::Press()
 {
 	click_fade = 255;
@@ -127,7 +133,7 @@ bool keyboard_inited = false;
 */
 u16 CharacterKey::GetKeyCode()
 {
-	return key.ch;
+	return keyboard->IsUppercase() ? key.ucase_ch : key.ch;
 }
 
 CharacterKey::CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key)
@@ -144,17 +150,23 @@ void CharacterKey::Draw()
 	Key::Draw();
 	
 	GX_Texture *texture = keyboard->buttonTexture;
-	lowercase_texture.Draw(keyboard->position_x + x + (texture->width/2 - 7) - grow, keyboard->position_y + y - grow,
-				  lowercase_texture.width + grow*30, lowercase_texture.height + grow*3, keyboard->opacity);
+	
+	GX_Texture *text_texture = keyboard->IsUppercase() ? &uppercase_texture : &lowercase_texture;
+	
+	text_texture->Draw(keyboard->position_x + x + (texture->width/2 - 7) - grow, keyboard->position_y + y - grow,
+				 text_texture->width + grow*30, text_texture->height + grow*3, keyboard->opacity);
 }
 
 u32 CharacterKey::GetBaseColor()
 {
-	return 0xFFFFFFFF;
+	return 0xFFFFFF;
 }
 
-
-
+void CharacterKey::Release()
+{
+	Key::Release();
+	keyboard->shiftKey->pressed = false;
+}
 
 /**
  Command Key
@@ -187,17 +199,39 @@ u16 CommandKey::GetKeyCode()
 
 
 
+/**
+ Shift Key
+ */
+ShiftKey::ShiftKey(Keyboard *keyboard, int x, int y, int width, const char* text) :
+CommandKey(keyboard, x, y, width, text, VNC_SHIFTLEFT)
+{
+}
+
+void ShiftKey::Press() {
+	pressed = !pressed;
+}
+void ShiftKey::Update() {
+	Key::Update();
+	click_fade = pressed ? 255 : 0;
+}
+
+void ShiftKey::Release() {
+}
+
 
 /**
  Keyboard
 */
 
 Keyboard::Keyboard() :
+	shiftKey(NULL),
+	capslockKey(NULL),
 	listener(NULL),
 	opacity(0),
 	position_x(40),
 	position_y(300),
 	buttonTexture(GX_Texture::LoadFromPNG(button))
+
 {
 	//Initialize 
 	if(!keyboard_inited) {
@@ -219,60 +253,18 @@ Keyboard::Keyboard() :
 		{70, 64},
 		{90, 96},
 	};
-	const struct ch_key keys[][13] = {
-	{
-		{'`','~'},
-		{'1','!'},
-		{'2','@'},
-		{'3','#'},
-		{'4','$'},
-		{'5','%'},
-		{'6','^'},
-		{'7','&'},
-		{'8','*'},
-		{'9','('},
-		{'0',')'},
-		{'-','_'},
-		{'=','+'}
-	},
-	{
-		{'q','Q'},
-		{'w','W'},
-		{'e','E'},
-		{'r','R'},
-		{'t','T'},
-		{'y','Y'},
-		{'u','U'},
-		{'i','I'},
-		{'o','O'},
-		{'p','P'},
-		{'[','{'},
-		{']','}'},
-		{'\\', '|'}
-	},
-	{
-		{'a', 'A'},
-		{'s', 'S'},
-		{'d', 'D'},
-		{'f', 'F'},
-		{'g', 'G'},
-		{'h', 'H'},
-		{'j', 'J'},
-		{'k', 'K'},
-		{'l', 'L'},
-		{';', ':'},
-		{'\'', '"'}
-	},
-	{
-		{'z', 'Z'},
-		{'x', 'X'},
-		{'c', 'C'},
-		{'v', 'V'},
-		{'b', 'B'},
-		{'n', 'N'},
-		{'m', 'M'},
-		{',', '<'},
-		{'.', '>'},
+	const struct ch_key keys[][13] = {{
+		{'`','~'}, {'1','!'}, {'2','@'}, {'3','#'},	{'4','$'}, {'5','%'}, {'6','^'},
+		{'7','&'}, {'8','*'}, {'9','('}, {'0',')'}, {'-','_'}, {'=','+'}
+	}, {
+		{'q','Q'}, {'w','W'}, {'e','E'}, {'r','R'}, {'t','T'}, {'y','Y'}, {'u','U'},
+		{'i','I'}, {'o','O'}, {'p','P'}, {'[','{'}, {']','}'}, {'\\', '|'}
+	}, {
+		{'a', 'A'}, {'s', 'S'}, {'d', 'D'}, {'f', 'F'}, {'g', 'G'}, {'h', 'H'},
+		{'j', 'J'},	{'k', 'K'}, {'l', 'L'}, {';', ':'},	{'\'', '"'}
+	}, {
+		{'z', 'Z'}, {'x', 'X'}, {'c', 'C'}, {'v', 'V'}, {'b', 'B'},
+		{'n', 'N'}, {'m', 'M'}, {',', '<'}, {'.', '>'},
 		{'/', '?'}
 	}};
 	
@@ -297,14 +289,15 @@ Keyboard::Keyboard() :
 	
 	//Command Keys (left side)
 	Keys[b++] = new CommandKey(this, 0, 32, 60, "tab", VNC_TAB);
-	Keys[b++] = new CommandKey(this, 0, 64, 70, "capslock", VNC_TAB);
-	Keys[b++] = new CommandKey(this, 0, 96, 90, "shift", VNC_SHIFTLEFT);
+	Keys[b++] = capslockKey = new ShiftKey(this, 0, 64, 70, "capslock");
+	Keys[b++] = shiftKey = new ShiftKey(this, 0, 96, 90, "shift");
 	Keys[b++] = new CommandKey(this, 0, 128, 60, "ctrl", VNC_CTRLLEFT);
 	Keys[b++] = new CommandKey(this, 60, 128, 60, "alt", VNC_ALTLEFT);
-	Keys[b++] = new CommandKey(this, 120, 128, 50, "meta", VNC_METALEFT);
+	Keys[b++] = new CommandKey(this, 120, 128, 50, "meta", VNC_METARIGHT);
 	
 	//(right side)
 	Keys[b++] = new CommandKey(this, 370, 128, 40, "del", VNC_DELETE);
+	Keys[b++] = new CommandKey(this, 410, 128, 40, "ESC", VNC_ESCAPE);
 	Keys[b++] = new CommandKey(this, 450, 128, 40, "left", VNC_LEFT);
 	Keys[b++] = new CommandKey(this, 490, 128, 40, "down", VNC_DOWN);
 	Keys[b++] = new CommandKey(this, 530, 128, 40, "right", VNC_RIGHT);
@@ -325,7 +318,6 @@ Keyboard::~Keyboard() {
 }
 
 	
-u16 gkeycode = 0;
 u16 keycodeToVNC(u16 keycode) {
 	switch(keycode) {
 		case KS_Home:		return VNC_HOME;
@@ -452,7 +444,7 @@ void Keyboard::Update()
 			continue;
 		}
 		
-		gkeycode = ke.keycode;
+		//gkeycode = ke.keycode;
 
 		if(listener != NULL)
 			listener->OnKey(keycodeToVNC(ke.symbol), isDown);
@@ -466,9 +458,9 @@ void Keyboard::Draw()
 		return;
 	
 	//TODO: Temporary debug code
-	char temp[100];
+/*	char temp[100];
 	sprintf(temp, "0x%x", gkeycode);
-	GX_Text(temp, 40, 0xFFFFFFFF).Draw(30,30);
+	GX_Text(temp, 40, 0xFFFFFFFF).Draw(30,30);*/
 	
 	//Draw all the keys
 	for(int i = 0; i < NUM_KEYS; i++)
@@ -477,6 +469,11 @@ void Keyboard::Draw()
 
 	if(hoverButton && IsVisible())
 		hoverButton->Draw();
+}
+
+bool Keyboard::IsUppercase()
+{
+	return shiftKey->pressed || capslockKey->pressed;
 }
 
 /**

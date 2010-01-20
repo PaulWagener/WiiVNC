@@ -60,11 +60,10 @@ public:
 	int pressed_counter;
 	bool pressed;
 	
-	bool sticky;
 	
 	Key(Keyboard *keyboard, int x, int y, int width);
 	~Key();
-	void Update();
+	virtual void Update();
 	virtual void Draw();
 	virtual void Press();
 	virtual void Trigger();
@@ -84,6 +83,7 @@ public:
 	void Draw();
 	u16 GetKeyCode();
 	u32 GetBaseColor();
+	void Release();
 };
 
 class CommandKey : public Key {
@@ -96,6 +96,14 @@ public:
 	u16 GetKeyCode();
 };
 
+class ShiftKey : public CommandKey {
+public:
+	ShiftKey(Keyboard *keyboard, int x, int y, int width, const char* text);
+	void Press();
+	void Release();
+	void Update();
+};
+
 class KeyboardListener {
 public:
 	virtual void OnKey(int keycode, bool isDown);
@@ -105,6 +113,10 @@ public:
 #define NUM_KEYS 100
 class Keyboard : public ControllerListener {
 public:
+	Key *shiftKey;
+	Key *capslockKey;
+
+	
 	KeyboardListener *listener;
 	int opacity;
 	bool show;
@@ -115,9 +127,12 @@ public:
 	Key *Keys[NUM_KEYS];
 	
 	GX_Texture *buttonTexture;
+	
+
 
 	Keyboard();
 	~Keyboard();
+	bool IsUppercase();
 	void Draw();
 	void Update();
 	void Show();
