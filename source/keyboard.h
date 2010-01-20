@@ -30,14 +30,15 @@ class Keyboard;
 #define VNC_TAB			0xff09
 #define VNC_ENTER		0xff0d
 #define VNC_ESCAPE		0xff1b
-#define VNC_LEFTSHIFT	0xffe1 
-#define VNC_RIGHTSHIFT	0xffe2 
+#define VNC_SHIFTLEFT	0xffe1 
+#define VNC_SHIFTRIGHT	0xffe2 
 #define VNC_CTRLLEFT	0xffe3 
 #define VNC_CTRLRIGHT	0xffe4 
 #define VNC_METALEFT	0xffe7 
 #define VNC_METARIGHT	0xffe8 
 #define VNC_ALTLEFT		0xffe9 
 #define VNC_ALTRIGHT	0xffea 
+#define VNC_DELETE		0xffff
 
 
 struct ch_key {
@@ -52,13 +53,22 @@ public:
 	Keyboard *keyboard;
 
 	bool hover;
+
 	u8 grow;
-	u8 click_fade; // 0 = no color, 255 = CLICK_COLOR
+	int click_fade; // 0 = no color, 255 = CLICK_COLOR
+	
+	int pressed_counter;
+	bool pressed;
+	
+	bool sticky;
 	
 	Key(Keyboard *keyboard, int x, int y, int width);
 	~Key();
 	void Update();
 	virtual void Draw();
+	virtual void Press();
+	virtual void Trigger();
+	virtual void Release();
 	virtual u32 GetBaseColor()=0;
 	
 	bool IsMouseOver(int x, int y);

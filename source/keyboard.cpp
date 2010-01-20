@@ -16,6 +16,8 @@ int cursor_x = 0, cursor_y = 0;
 
 void KeyboardListener::OnKey(int keycode, bool isDown) {}
 
+Key* pressedButton;
+
 /**
  * Key class
  */
@@ -27,7 +29,11 @@ Key::Key(Keyboard *theKeyboard, int x, int y, int width) :
 	width(width),
 	keyboard(theKeyboard),
 	hover(false),
-	grow(0)
+	grow(0),
+	click_fade(0),
+	pressed_counter(0),
+	pressed(false),
+	sticky(false)
 {
 	return;
 }
@@ -37,13 +43,46 @@ Key::~Key()
 }
 	
 
-#define GROW_SPEED 2
+#define GROW_SPEED 2 //The higher the faster
+#define CLICKFADE_SPEED 20 //The higher the faster
+
+#define PRESS_DELAY 30 //Time key has te be pressed before it starts repeating
+#define PRESS_REPEAT 10 //Time between each repeat
 void Key::Update()
 {
-	if(hover && grow < BUTTON_GROW_MAX)
-		grow += GROW_SPEED;
-	else if(!hover && grow > 0)
-		grow -= GROW_SPEED;
+	if(hover && grow < BUTTON_GROW_MAX) grow += GROW_SPEED;
+	else if(!hover && grow > 0) grow -= GROW_SPEED;
+	
+	if(click_fade > 0) click_fade -= CLICKFADE_SPEED;
+	else click_fade = 0;
+	
+	if(!sticky && pressed) {
+		pressed_counter++;
+		
+		if(pressed_counter > PRESS_DELAY && pressed_counter % PRESS_REPEAT == 0)
+			Trigger();
+	}
+}
+
+void Key::Trigger()
+{
+	click_fade = 255;
+	if(keyboard->listener != NULL) {
+		keyboard->listener->OnKey(GetKeyCode(), true);
+	}
+}
+	
+u8 tween(u8 v1, u8 v2, float progress)
+{
+	return v1 + (v2 - v1) * progress;
+}
+
+u32 colortween(u32 from_color, u32 to_color, float progress)
+{
+	return tween(from_color, to_color, progress) |
+			(tween(from_color >> 8, to_color >> 8, progress) << 8) |
+			(tween(from_color >> 16, to_color >> 16, progress) << 16) |
+			(tween(from_color >> 24, to_color >> 24, progress) << 24);
 }
 
 /**
@@ -51,7 +90,8 @@ void Key::Update()
  */
 void Key::Draw()
 {
-	u32 color = hover ? HOVER_COLOR : this->GetBaseColor();
+	u32 base_color = hover ? HOVER_COLOR : this->GetBaseColor();
+	u32 color = colortween(base_color, CLICK_COLOR, click_fade / (float)255);
 	
 	GX_Texture *texture = keyboard->buttonTexture;
 	texture->Draw(keyboard->position_x + x - grow, keyboard->position_y + y - grow,
@@ -63,6 +103,19 @@ bool Key::IsMouseOver(int mouse_x, int mouse_y) {
 	
 	return	keyboard->position_x + x < mouse_x && mouse_x < keyboard->position_x + x + width &&
 			keyboard->position_y + y < mouse_y && mouse_y < keyboard->position_y + y + texture->height;
+}
+
+void Key::Press()
+{
+	click_fade = 255;
+	Trigger();
+	pressed_counter = 0;
+	pressed = true;
+}
+
+void Key::Release()
+{
+	pressed = false;
 }
 
 bool keyboard_inited = false;
@@ -109,7 +162,7 @@ u32 CharacterKey::GetBaseColor()
 
 CommandKey::CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code)
 : Key(keyboard, x, y, width),
-	text_texture(GX_Text( text, 14, COMMAND_TEXT_COLOR)),
+	text_texture(GX_Text( text, 12, 0)),
 	key_code(key_code)
 {
 }
@@ -118,9 +171,8 @@ void CommandKey::Draw()
 {
 	Key::Draw();
 	
-	GX_Texture *texture = keyboard->buttonTexture;
-	text_texture.Draw(keyboard->position_x + x + (texture->width/2 - 7) - grow, keyboard->position_y + y - grow,
-						   text_texture.width + grow*30, text_texture.height + grow*3, keyboard->opacity);
+	text_texture.Draw(keyboard->position_x + x + 5 - grow, keyboard->position_y + y - grow,
+						   text_texture.width + grow*30, text_texture.height + grow*2, keyboard->opacity);
 }
 
 u32 CommandKey::GetBaseColor()
@@ -239,16 +291,27 @@ Keyboard::Keyboard() :
 	}
 	//Special extra wide space key
 	struct ch_key space_ch = {' ', ' '};
-	Key *spaceKey = new CharacterKey(this, 150, 128, space_ch);
-	spaceKey->width = 160;
+	Key *spaceKey = new CharacterKey(this, 170, 128, space_ch);
+	spaceKey->width = 200;
 	Keys[b++] = spaceKey;
 	
-	//Command Keys
+	//Command Keys (left side)
 	Keys[b++] = new CommandKey(this, 0, 32, 60, "tab", VNC_TAB);
-	Keys[b++] = new CommandKey(this, 0, 64, 80, "capslock", VNC_TAB);
-	Keys[b++] = new CommandKey(this, 0, 96, 90, "shift", VNC_LEFTSHIFT);
+	Keys[b++] = new CommandKey(this, 0, 64, 70, "capslock", VNC_TAB);
+	Keys[b++] = new CommandKey(this, 0, 96, 90, "shift", VNC_SHIFTLEFT);
+	Keys[b++] = new CommandKey(this, 0, 128, 60, "ctrl", VNC_CTRLLEFT);
+	Keys[b++] = new CommandKey(this, 60, 128, 60, "alt", VNC_ALTLEFT);
+	Keys[b++] = new CommandKey(this, 120, 128, 50, "meta", VNC_METALEFT);
 	
+	//(right side)
+	Keys[b++] = new CommandKey(this, 370, 128, 40, "del", VNC_DELETE);
+	Keys[b++] = new CommandKey(this, 450, 128, 40, "left", VNC_LEFT);
+	Keys[b++] = new CommandKey(this, 490, 128, 40, "down", VNC_DOWN);
+	Keys[b++] = new CommandKey(this, 530, 128, 40, "right", VNC_RIGHT);
+	Keys[b++] = new CommandKey(this, 490, 96, 40, "up", VNC_UP);
 	
+	Keys[b++] = new CommandKey(this, 510, 64, 70, "return", VNC_ENTER);
+	Keys[b++] = new CommandKey(this, 515, 0, 65, "backspace", VNC_BACKSPACE);
 }
 
 Keyboard::~Keyboard() {
@@ -290,8 +353,8 @@ u16 keycodeToVNC(u16 keycode) {
 		case KS_Tab:		return VNC_TAB;
 		case KS_Return:		return VNC_ENTER;
 		case KS_Escape:		return VNC_ESCAPE;
-		case KS_Shift_L:	return VNC_LEFTSHIFT;
-		case KS_Shift_R:	return VNC_RIGHTSHIFT;
+		case KS_Shift_L:	return VNC_SHIFTLEFT;
+		case KS_Shift_R:	return VNC_SHIFTRIGHT;
 		case KS_Control_L:	return VNC_CTRLLEFT;
 		case KS_Control_R:	return VNC_CTRLRIGHT;
 		case KS_Meta_L:		return VNC_METALEFT;
@@ -343,9 +406,13 @@ Key *hoverButton = NULL;
 void Keyboard::Show()
 {
 	for(int i = 0; i < NUM_KEYS; i++) {
-		if(Keys[i] != NULL && Keys[i]->IsMouseOver(cursor_x, cursor_y)) {
-		   Keys[i]->hover = true;
-		   hoverButton = Keys[i];
+		if(Keys[i] != NULL) {
+			Keys[i]->grow = 0;
+			Keys[i]->hover = false;
+			if(Keys[i]->IsMouseOver(cursor_x, cursor_y)) {
+				Keys[i]->hover = true;
+				hoverButton = Keys[i];
+			}
 		}
 	}
 	show = true;
@@ -412,17 +479,25 @@ void Keyboard::Draw()
 		hoverButton->Draw();
 }
 
-
+/**
+ * Update which key has the mouse hovering above it
+ */
 void Keyboard::OnCursorMove(int x, int y)
 {
 	cursor_x = x;
 	cursor_y = y;
-	hoverButton = NULL;
-	for(int i = 0; i < NUM_KEYS; i++) {
-		if(Keys[i] != NULL) {
-			Keys[i]->hover = Keys[i]->IsMouseOver(x, y);
-			if(Keys[i]->hover)
-				hoverButton = Keys[i];			 
+	
+	//Do not update hover information if the user is pressing a key
+	if(pressedButton == NULL) {
+		hoverButton = NULL;
+		
+		//Update for all keys wether there is a pointer hovering above it
+		for(int i = 0; i < NUM_KEYS; i++) {
+			if(Keys[i] != NULL) {
+				Keys[i]->hover = Keys[i]->IsMouseOver(x, y);
+				if(Keys[i]->hover)
+					hoverButton = Keys[i];
+			}
 		}
 	}
 }
@@ -435,21 +510,30 @@ void Keyboard::SetListener(KeyboardListener *listener)
 #include <wiikeyboard/wsksymdef.h>
 
 /**
- * User clicks on a button with his pointer
+ * User clicks with his pointer
  */
 void Keyboard::OnButton(bool isDown)
 {
-	if(listener != NULL) {
+	if(isDown) {
+		//Start pressing the key that the user clicked on
 		for(int i = 0; i < NUM_KEYS; i++) {
 			if(Keys[i] != NULL && Keys[i]->IsMouseOver(cursor_x, cursor_y)) {
-				listener->OnKey(Keys[i]->GetKeyCode(), isDown);
+				pressedButton = Keys[i];
+				pressedButton->Press();
 				return;
 			}
 		}
-		
+	} else if(pressedButton != NULL) {
+		//Release the key the user last pressed
+		pressedButton->Release();
+		pressedButton = NULL;
+		OnCursorMove(cursor_x, cursor_y); //Updates the hoverButtn
 	}
 }
 
+/**
+ * Returns if the coordinate is hovering over a key
+ */
 bool Keyboard::IsMouseOver(int x, int y)
 {
 	if(!IsVisible())

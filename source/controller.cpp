@@ -99,14 +99,21 @@ void Controller::Update()
 		if(focus_listener != NULL) {
 			if(wpad_down & WPAD_BUTTON_A) focus_listener->OnButton(true);
 			if(wpad_up & WPAD_BUTTON_A) focus_listener->OnButton(false);
-			if(wpad_down & WPAD_BUTTON_B) focus_listener->OnSecondaryButton(true);
-			if(wpad_up & WPAD_BUTTON_B) focus_listener->OnSecondaryButton(false);
 		}
 			
 		if(listener != NULL) {
+			if(keyboard != NULL && wpad_up & WPAD_BUTTON_A) keyboard->OnButton(false);
+			
+			
+			if(wpad_down & WPAD_BUTTON_A) listener->OnButton(true);
+			if(wpad_up & WPAD_BUTTON_A) listener->OnButton(false);
+			if(wpad_down & WPAD_BUTTON_B) listener->OnSecondaryButton(true);
+			if(wpad_up & WPAD_BUTTON_B) listener->OnSecondaryButton(false);
+			
 			if(wpad_held & WPAD_BUTTON_1) {
-				if(wpad_down & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) focus_listener->OnMiddleButton(true);
-				if(wpad_up & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) focus_listener->OnMiddleButton(false);			
+				if(wpad_down & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) listener->OnMiddleButton(true);
+				if(wpad_up & (WPAD_BUTTON_LEFT | WPAD_BUTTON_RIGHT)) listener->OnMiddleButton(false);			
+
 				if(wpad_down & WPAD_BUTTON_UP) listener->OnScrollUp();
 				if(wpad_down & WPAD_BUTTON_DOWN) listener->OnScrollDown();
 			} else {
@@ -159,13 +166,16 @@ void Controller::Update()
 		if(focus_listener != NULL) {
 			if(pad_down & PAD_BUTTON_A) focus_listener->OnButton(true);
 			if(pad_up & PAD_BUTTON_A) focus_listener->OnButton(false);
-			if(pad_down & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) focus_listener->OnMiddleButton(true);
-			if(pad_up & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) focus_listener->OnMiddleButton(false);
-			if(pad_down & PAD_BUTTON_B) focus_listener->OnSecondaryButton(true);
-			if(pad_up & PAD_BUTTON_B) focus_listener->OnSecondaryButton(false);
 		}
 		
 		if(listener != NULL) {
+			if(keyboard != NULL && pad_up & PAD_BUTTON_A) keyboard->OnButton(false);
+			
+			if(pad_down & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) listener->OnMiddleButton(true);
+			if(pad_up & (PAD_BUTTON_LEFT | PAD_BUTTON_RIGHT)) listener->OnMiddleButton(false);
+			if(pad_down & PAD_BUTTON_B) listener->OnSecondaryButton(true);
+			if(pad_up & PAD_BUTTON_B) listener->OnSecondaryButton(false);
+			
 			if(pad_down & PAD_BUTTON_UP) listener->OnScrollUp();
 			if(pad_down & PAD_BUTTON_DOWN) listener->OnScrollDown();
 			
