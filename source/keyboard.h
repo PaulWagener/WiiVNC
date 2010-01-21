@@ -72,6 +72,7 @@ public:
 	
 	bool IsMouseOver(int x, int y);
 	virtual u16 GetKeyCode()=0;
+	virtual bool HasKeyCode(u16 keycode)=0;
 };
 
 class CharacterKey : public Key {
@@ -82,6 +83,7 @@ public:
 	CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key);
 	void Draw();
 	u16 GetKeyCode();
+	bool HasKeyCode(u16 keycode);
 	u32 GetBaseColor();
 	void Release();
 };
@@ -94,6 +96,7 @@ public:
 	void Draw();
 	u32 GetBaseColor();
 	u16 GetKeyCode();
+	bool HasKeyCode(u16 keycode);
 };
 
 class ShiftKey : public CommandKey {
@@ -115,13 +118,19 @@ class Keyboard : public ControllerListener {
 public:
 	Key *shiftKey;
 	Key *capslockKey;
-
+	bool usbShiftPressed;
 	
 	KeyboardListener *listener;
 	int opacity;
 	bool show;
-	
+
+	//A reference to the controller so that we can get an up-to-date cursor location
+	//And let it now to where it should send its buttonpresses.
+	//The Controller class fills this field in as soon as it is created
+	//As that class is one of the first to be created we can assume that the controller in this field always exists.
 	static Controller *controller;
+	
+	
 	int position_x, position_y;
 	
 	Key *Keys[NUM_KEYS];
@@ -133,6 +142,7 @@ public:
 	Keyboard();
 	~Keyboard();
 	bool IsUppercase();
+	void UpdateHoverButton();
 	void Draw();
 	void Update();
 	void Show();

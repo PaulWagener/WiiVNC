@@ -39,6 +39,8 @@ public:
 	void Draw();
 	void SetListener(ControllerListener *listener);
 	void SetKeyboard(Keyboard *keyboard);
+	int GetX();
+	int GetY();
 private:
 	//Current cursor location
 	int x, y;

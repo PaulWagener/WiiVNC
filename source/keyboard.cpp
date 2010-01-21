@@ -1,6 +1,5 @@
 #include "keyboard.h"
 #include "freetype.h"
-#include "gfx/keyboard_tex.h"
 #include "gfx/button.h"
 #include "controller.h"
 
@@ -11,8 +10,6 @@ Controller *Keyboard::controller = NULL;
 #define CLICK_COLOR 0xf7f726
 #define COMMAND_COLOR 0xAEE9FA
 #define COMMAND_TEXT_COLOR 0x475F66
-
-int cursor_x = 0, cursor_y = 0;
 
 void KeyboardListener::OnKey(int keycode, bool isDown) {}
 
@@ -46,7 +43,7 @@ Key::~Key()
 #define CLICKFADE_SPEED 20 //The higher the faster
 
 #define PRESS_DELAY 30 //Time key has te be pressed before it starts repeating
-#define PRESS_REPEAT 10 //Time between each repeat
+#define PRESS_REPEAT 5 //Time between each repeat
 void Key::Update()
 {
 	if(hover && grow < BUTTON_GROW_MAX) grow += GROW_SPEED;
@@ -62,11 +59,12 @@ void Key::Update()
 			Trigger();
 	}
 }
-
+int gkeycode;
 void Key::Trigger()
 {
 	click_fade = 255;
-	if(keyboard->listener != NULL) {
+	if(keyboard->listener != NULL && GetKeyCode() != 0) {
+		gkeycode = GetKeyCode();
 		keyboard->listener->OnKey(GetKeyCode(), true);
 		keyboard->listener->OnKey(GetKeyCode(), false);
 	}
@@ -104,8 +102,8 @@ void Key::Draw()
 bool Key::IsMouseOver(int mouse_x, int mouse_y) {
 	GX_Texture *texture = keyboard->buttonTexture;
 	
-	return	keyboard->position_x + x < mouse_x && mouse_x < keyboard->position_x + x + width &&
-			keyboard->position_y + y < mouse_y && mouse_y < keyboard->position_y + y + texture->height;
+	return	keyboard->position_x + x <= mouse_x && mouse_x < keyboard->position_x + x + width &&
+			keyboard->position_y + y <= mouse_y && mouse_y < keyboard->position_y + y + texture->height;
 }
 
 /**
@@ -134,6 +132,11 @@ bool keyboard_inited = false;
 u16 CharacterKey::GetKeyCode()
 {
 	return keyboard->IsUppercase() ? key.ucase_ch : key.ch;
+}
+
+bool CharacterKey::HasKeyCode(u16 keycode)
+{
+	return key.ch == keycode || key.ucase_ch == keycode;
 }
 
 CharacterKey::CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key)
@@ -165,7 +168,11 @@ u32 CharacterKey::GetBaseColor()
 void CharacterKey::Release()
 {
 	Key::Release();
-	keyboard->shiftKey->pressed = false;
+	if(!keyboard->usbShiftPressed && keyboard->shiftKey->pressed) {
+		keyboard->shiftKey->pressed = false;
+		if(keyboard->listener != NULL)
+			keyboard->listener->OnKey(VNC_SHIFTLEFT, false);
+	}
 }
 
 /**
@@ -197,18 +204,25 @@ u16 CommandKey::GetKeyCode()
 	return key_code;				
 }
 
+bool CommandKey::HasKeyCode(u16 keycode)
+{
+	return key_code == keycode;
+}
+
 
 
 /**
  Shift Key
  */
 ShiftKey::ShiftKey(Keyboard *keyboard, int x, int y, int width, const char* text) :
-CommandKey(keyboard, x, y, width, text, VNC_SHIFTLEFT)
+CommandKey(keyboard, x, y, width, text, 0)
 {
 }
 
 void ShiftKey::Press() {
 	pressed = !pressed;
+	if(keyboard->listener != NULL)
+		keyboard->listener->OnKey(VNC_SHIFTLEFT, pressed);
 }
 void ShiftKey::Update() {
 	Key::Update();
@@ -218,7 +232,6 @@ void ShiftKey::Update() {
 void ShiftKey::Release() {
 }
 
-
 /**
  Keyboard
 */
@@ -226,6 +239,7 @@ void ShiftKey::Release() {
 Keyboard::Keyboard() :
 	shiftKey(NULL),
 	capslockKey(NULL),
+	usbShiftPressed(false),
 	listener(NULL),
 	opacity(0),
 	position_x(40),
@@ -282,29 +296,28 @@ Keyboard::Keyboard() :
 		}
 	}
 	//Special extra wide space key
-	struct ch_key space_ch = {' ', ' '};
-	Key *spaceKey = new CharacterKey(this, 170, 128, space_ch);
+	Key *spaceKey = new CharacterKey(this, 170, 128, (struct ch_key){' ', ' '});
 	spaceKey->width = 200;
 	Keys[b++] = spaceKey;
 	
 	//Command Keys (left side)
-	Keys[b++] = new CommandKey(this, 0, 32, 60, "tab", VNC_TAB);
-	Keys[b++] = capslockKey = new ShiftKey(this, 0, 64, 70, "capslock");
-	Keys[b++] = shiftKey = new ShiftKey(this, 0, 96, 90, "shift");
-	Keys[b++] = new CommandKey(this, 0, 128, 60, "ctrl", VNC_CTRLLEFT);
-	Keys[b++] = new CommandKey(this, 60, 128, 60, "alt", VNC_ALTLEFT);
-	Keys[b++] = new CommandKey(this, 120, 128, 50, "meta", VNC_METARIGHT);
+	Keys[b++] = new CommandKey(this, 0, 32, 60, "Tab", VNC_TAB);
+	Keys[b++] = capslockKey = new ShiftKey(this, 0, 64, 70, "Capslock");
+	Keys[b++] = shiftKey = new ShiftKey(this, 0, 96, 90, "Shift");
+	Keys[b++] = new CommandKey(this, 0, 128, 60, "Ctrl", VNC_CTRLLEFT);
+	Keys[b++] = new CommandKey(this, 60, 128, 60, "Alt", VNC_ALTLEFT);
+	Keys[b++] = new CommandKey(this, 120, 128, 50, "Meta", VNC_METARIGHT);
 	
-	//(right side)
-	Keys[b++] = new CommandKey(this, 370, 128, 40, "del", VNC_DELETE);
+	//Command Keys (right side)
+	Keys[b++] = new CommandKey(this, 370, 128, 40, "Del", VNC_DELETE);
 	Keys[b++] = new CommandKey(this, 410, 128, 40, "ESC", VNC_ESCAPE);
-	Keys[b++] = new CommandKey(this, 450, 128, 40, "left", VNC_LEFT);
-	Keys[b++] = new CommandKey(this, 490, 128, 40, "down", VNC_DOWN);
-	Keys[b++] = new CommandKey(this, 530, 128, 40, "right", VNC_RIGHT);
-	Keys[b++] = new CommandKey(this, 490, 96, 40, "up", VNC_UP);
+	Keys[b++] = new CommandKey(this, 450, 128, 40, "Left", VNC_LEFT);
+	Keys[b++] = new CommandKey(this, 490, 128, 40, "Down", VNC_DOWN);
+	Keys[b++] = new CommandKey(this, 530, 128, 40, "Right", VNC_RIGHT);
+	Keys[b++] = new CommandKey(this, 490, 96, 40, "Up", VNC_UP);
 	
-	Keys[b++] = new CommandKey(this, 510, 64, 70, "return", VNC_ENTER);
-	Keys[b++] = new CommandKey(this, 515, 0, 65, "backspace", VNC_BACKSPACE);
+	Keys[b++] = new CommandKey(this, 510, 64, 70, "Return", VNC_ENTER);
+	Keys[b++] = new CommandKey(this, 520, 0, 60, "Backspace", VNC_BACKSPACE);
 }
 
 Keyboard::~Keyboard() {
@@ -329,6 +342,7 @@ u16 keycodeToVNC(u16 keycode) {
 		case KS_Prior:		return VNC_PAGE_UP;
 		case KS_Next:		return VNC_PAGE_DOWN;
 		case KS_Insert:		return VNC_INSERT;
+		case KS_Delete:		return VNC_DELETE;
 		case KS_f1:			return VNC_F1;
 		case KS_f2:			return VNC_F1;
 		case KS_f3:			return VNC_F3;
@@ -397,27 +411,18 @@ Key *hoverButton = NULL;
 
 void Keyboard::Show()
 {
-	for(int i = 0; i < NUM_KEYS; i++) {
-		if(Keys[i] != NULL) {
-			Keys[i]->grow = 0;
-			Keys[i]->hover = false;
-			if(Keys[i]->IsMouseOver(cursor_x, cursor_y)) {
-				Keys[i]->hover = true;
-				hoverButton = Keys[i];
-			}
-		}
-	}
+	UpdateHoverButton();
 	show = true;
 }
 
 void Keyboard::Hide()
 {
+	hoverButton = NULL;
 	for(int i = 0; i < NUM_KEYS; i++)
 		if(Keys[i] != NULL)
 			Keys[i]->hover = false;
 	show = false;
 }
-
 
 void Keyboard::Update()
 {
@@ -430,6 +435,7 @@ void Keyboard::Update()
 	for(int i = 0; i < NUM_KEYS; i++)
 		if(Keys[i] != NULL)
 			Keys[i]->Update();
+
 	
 	//Send keys pressed by a USB keyboard
 	keyboard_event ke;
@@ -443,11 +449,33 @@ void Keyboard::Update()
 		} else {
 			continue;
 		}
-		
-		//gkeycode = ke.keycode;
 
-		if(listener != NULL)
-			listener->OnKey(keycodeToVNC(ke.symbol), isDown);
+		u16 keycode = keycodeToVNC(ke.symbol);
+		
+		//Let onscreen shiftstate be the same as the usb keyboard shiftstate
+		if(keycode == VNC_SHIFTLEFT || keycode == VNC_SHIFTRIGHT)
+			shiftKey->pressed = usbShiftPressed = (ke.type == KEYBOARD_PRESSED);
+
+		
+
+		//Look for a key on the onscreen keyboard to press
+		//(This takes care of the repeating behaviour and also does the yellow flashing)
+		bool foundKey = false;
+		for(int i = 0; i < NUM_KEYS; i++)
+		{
+			if(Keys[i] != NULL && Keys[i]->HasKeyCode(keycode)) {
+				if(isDown)
+					Keys[i]->Press();
+				else
+					Keys[i]->Release();
+				foundKey = true;
+			}
+		}
+		
+		//In case the key isn't represented by the onscreen keyboard send it manually
+		if(!foundKey && listener != NULL)
+			listener->OnKey(keycode, isDown);
+
 	}
 
 }
@@ -458,22 +486,25 @@ void Keyboard::Draw()
 		return;
 	
 	//TODO: Temporary debug code
-/*	char temp[100];
-	sprintf(temp, "0x%x", gkeycode);
-	GX_Text(temp, 40, 0xFFFFFFFF).Draw(30,30);*/
+	 char temp[100];
+	 sprintf(temp, "0x%x", gkeycode);
+	 GX_Text(temp, 40, 0xFFFFFFFF).Draw(30,30);
+	
 	
 	//Draw all the keys
 	for(int i = 0; i < NUM_KEYS; i++)
 		if(Keys[i] != NULL)
 			Keys[i]->Draw();
 
-	if(hoverButton && IsVisible())
+	//Draw the button the cursor is over a second time
+	//to make sure it is not drawn below other buttons
+	if(hoverButton && opacity == 255)
 		hoverButton->Draw();
 }
 
 bool Keyboard::IsUppercase()
 {
-	return shiftKey->pressed || capslockKey->pressed;
+	return shiftKey->pressed || capslockKey->pressed || usbShiftPressed;
 }
 
 /**
@@ -481,20 +512,22 @@ bool Keyboard::IsUppercase()
  */
 void Keyboard::OnCursorMove(int x, int y)
 {
-	cursor_x = x;
-	cursor_y = y;
-	
 	//Do not update hover information if the user is pressing a key
 	if(pressedButton == NULL) {
-		hoverButton = NULL;
-		
-		//Update for all keys wether there is a pointer hovering above it
-		for(int i = 0; i < NUM_KEYS; i++) {
-			if(Keys[i] != NULL) {
-				Keys[i]->hover = Keys[i]->IsMouseOver(x, y);
-				if(Keys[i]->hover)
-					hoverButton = Keys[i];
-			}
+		UpdateHoverButton();
+	}
+}
+
+void Keyboard::UpdateHoverButton()
+{
+	hoverButton = NULL;
+	
+	//Update for all keys wether there is a pointer hovering above it
+	for(int i = 0; i < NUM_KEYS; i++) {
+		if(Keys[i] != NULL) {
+			Keys[i]->hover = Keys[i]->IsMouseOver(controller->GetX(), controller->GetY());
+			if(Keys[i]->hover)
+				hoverButton = Keys[i];
 		}
 	}
 }
@@ -514,7 +547,7 @@ void Keyboard::OnButton(bool isDown)
 	if(isDown) {
 		//Start pressing the key that the user clicked on
 		for(int i = 0; i < NUM_KEYS; i++) {
-			if(Keys[i] != NULL && Keys[i]->IsMouseOver(cursor_x, cursor_y)) {
+			if(Keys[i] != NULL && Keys[i]->IsMouseOver(controller->GetX(), controller->GetY())) {
 				pressedButton = Keys[i];
 				pressedButton->Press();
 				return;
@@ -524,7 +557,7 @@ void Keyboard::OnButton(bool isDown)
 		//Release the key the user last pressed
 		pressedButton->Release();
 		pressedButton = NULL;
-		OnCursorMove(cursor_x, cursor_y); //Updates the hoverButtn
+		UpdateHoverButton();
 	}
 }
 

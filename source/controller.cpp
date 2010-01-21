@@ -50,8 +50,8 @@ u8 usb_oldbutton = 0;
 
 void Controller::Update()
 {
-	bool onKeyboard = keyboard != NULL && keyboard->IsMouseOver(x, y); //TODO
-	ControllerListener *focus_listener = onKeyboard ? keyboard : listener; //Buttonpresses may be intercepted by the on-screen keyboard
+	bool onKeyboard = keyboard != NULL && keyboard->IsMouseOver(x, y);
+	ControllerListener *focus_listener = onKeyboard ? keyboard : listener; //Some user interaction may be intercepted by the on-screen keyboard
 	previous_x = x;
 	previous_y = y;
 
@@ -204,10 +204,18 @@ void Controller::Update()
 	if(y < 0) y = 0;
 	if(y > SCREEN_HEIGHT) y = SCREEN_HEIGHT;
 	
-	ControllerListener *l = onKeyboard ? keyboard : listener;
-	if(l != NULL && (x != previous_x || y != previous_y))
-		l->OnCursorMove(x, y);
+	if(focus_listener != NULL && (x != previous_x || y != previous_y))
+		focus_listener->OnCursorMove(x, y);
+}
 
+int Controller::GetX()
+{
+	return x;
+}
+
+int Controller::GetY()
+{
+	return y;
 }
 
 void Controller::SetListener(ControllerListener *listener)
