@@ -202,7 +202,6 @@ private:
 	//Note that these keys are also stored in Keys array, these are just shortcuts
 	Key *shiftKey;
 	Key *capslockKey;
-	bool usbShiftPressed;
 	
 	//Key that is currently depressed
 	Key* pressedButton;

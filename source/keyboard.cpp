@@ -237,7 +237,6 @@ Keyboard::Keyboard() :
 	show(false),
 	shiftKey(NULL),
 	capslockKey(NULL),
-	usbShiftPressed(false),
 	pressedButton(NULL),
 	hoverButton(NULL),
 	listener(NULL),
@@ -433,21 +432,13 @@ void Keyboard::Update()
 	keyboard_event ke;
 	while(KEYBOARD_GetEvent(&ke))
 	{
-		bool isDown;
-		if(ke.type == KEYBOARD_PRESSED) {
-			isDown = true;
-		} else if(ke.type == KEYBOARD_RELEASED) {
-			isDown = false;
-		} else {
+		if(ke.type != KEYBOARD_PRESSED && ke.type != KEYBOARD_RELEASED)
 			continue;
-		}
+		
+		bool isDown = ke.type == KEYBOARD_PRESSED;
 
 		u16 keycode = keycodeToVNC(ke.symbol);
 		
-		//Let onscreen shiftstate be the same as the usb keyboard shiftstate
-		if(keycode == VNC_SHIFTLEFT || keycode == VNC_SHIFTRIGHT)
-			shiftKey->pressed = usbShiftPressed = (ke.type == KEYBOARD_PRESSED);
-
 		//Look for a key on the onscreen keyboard to press
 		//(This takes care of the repeating behaviour and also does the yellow flashing)
 		bool foundKey = false;
@@ -462,6 +453,7 @@ void Keyboard::Update()
 					Keys[i]->Release();
 				}
 				foundKey = true;
+				break;
 			}
 		}
 		
@@ -490,7 +482,7 @@ void Keyboard::Draw()
 
 bool Keyboard::IsUppercase()
 {
-	return shiftKey->pressed || capslockKey->pressed || usbShiftPressed;
+	return shiftKey->pressed || capslockKey->pressed;
 }
 
 /**
