@@ -1,82 +1,75 @@
 #include "keyboard.h"
-#include "freetype.h"
-#include "gfx/button.h"
-#include "controller.h"
-
-#define	BUTTON_GROW_MAX 5
 
 Controller *Keyboard::controller = NULL;
-#define HOVER_COLOR 0xbec3d6
-#define CLICK_COLOR 0xf7f726
-#define COMMAND_COLOR 0xAEE9FA
-#define COMMAND_TEXT_COLOR 0x475F66
+bool Keyboard::keyboard_inited = false;
 
-void KeyboardListener::OnKey(int keycode, bool isDown) {}
 
-Key* pressedButton;
-
-/**
- * Key class
- */
-
+/*===========*\
+      Key
+\*===========*/
 
 Key::Key(Keyboard *theKeyboard, int x, int y, int width) :
 	x(x),
 	y(y),
 	width(width),
-	keyboard(theKeyboard),
-	hover(false),
-	grow(0),
 	click_fade(0),
+	sticky(false),
+	pressedByUSB(false),
+	pressed(false),
 	pressed_counter(0),
-	pressed(false)
+	keyboard(theKeyboard),
+	grow(0)
 {
 	return;
 }
 
-Key::~Key()
-{
-}
-	
-
-#define GROW_SPEED 2 //The higher the faster
-#define CLICKFADE_SPEED 20 //The higher the faster
-
-#define PRESS_DELAY 30 //Time key has te be pressed before it starts repeating
-#define PRESS_REPEAT 5 //Time between each repeat
 void Key::Update()
 {
-	if(hover && grow < BUTTON_GROW_MAX) grow += GROW_SPEED;
-	else if(!hover && grow > 0) grow -= GROW_SPEED;
+	//Size & color animation
+	if(keyboard->hoverButton == this && grow < BUTTON_GROW_MAX) grow += GROW_SPEED;
+	else if(keyboard->hoverButton != this && grow > 0) grow -= GROW_SPEED;
 	
-	if(click_fade > 0) click_fade -= CLICKFADE_SPEED;
-	else click_fade = 0;
-	
-	if(pressed) {
-		pressed_counter++;
+	if(sticky) {
+		//Fade in or out depending on if the key is pressed
+		if(pressed && click_fade < 255) click_fade += CLICKFADE_SPEED;
+		if(!pressed && click_fade > 0) click_fade -= CLICKFADE_SPEED;
+		if(click_fade < 0) click_fade = 0;
+		if(click_fade > 255) click_fade = 255;
 		
-		if(pressed_counter > PRESS_DELAY && pressed_counter % PRESS_REPEAT == 0)
-			Trigger();
+	} else {		
+		//Always fade away
+		if(click_fade > 0) click_fade -= CLICKFADE_SPEED;
+		else click_fade = 0;
+		
+		//Do the repeating behaviour if the key remains depressed
+		if(pressed) {
+			pressed_counter++;
+		
+			if(pressed_counter > PRESS_DELAY && pressed_counter % PRESS_REPEAT == 0)
+				Trigger();
+		}
 	}
 }
-int gkeycode;
+
+/**
+ * Flash yellow and create a key event
+ */
 void Key::Trigger()
 {
 	click_fade = 255;
 	if(keyboard->listener != NULL && GetKeyCode() != 0) {
-		gkeycode = GetKeyCode();
 		keyboard->listener->OnKey(GetKeyCode(), true);
 		keyboard->listener->OnKey(GetKeyCode(), false);
 	}
 }
-	
-u8 tween(u8 v1, u8 v2, float progress)
-{
+
+
+//Color animation functions
+u8 tween(u8 v1, u8 v2, float progress) {
 	return v1 + (v2 - v1) * progress;
 }
 
-u32 colortween(u32 from_color, u32 to_color, float progress)
-{
+u32 colortween(u32 from_color, u32 to_color, float progress) {
 	return tween(from_color, to_color, progress) |
 			(tween(from_color >> 8, to_color >> 8, progress) << 8) |
 			(tween(from_color >> 16, to_color >> 16, progress) << 16) |
@@ -88,7 +81,7 @@ u32 colortween(u32 from_color, u32 to_color, float progress)
  */
 void Key::Draw()
 {
-	u32 base_color = hover ? HOVER_COLOR : this->GetBaseColor();
+	u32 base_color = keyboard->hoverButton == this ? HOVER_COLOR : this->GetBaseColor();
 	u32 color = colortween(base_color, CLICK_COLOR, click_fade / (float)255);
 	
 	GX_Texture *texture = keyboard->buttonTexture;
@@ -106,29 +99,77 @@ bool Key::IsMouseOver(int mouse_x, int mouse_y) {
 			keyboard->position_y + y <= mouse_y && mouse_y < keyboard->position_y + y + texture->height;
 }
 
-/**
- * Simulates a press on this key
- */
 void Key::Press()
 {
-	click_fade = 255;
-	Trigger();
-	pressed_counter = 0;
+	if(pressed || pressedByUSB)
+		return;
+	
+	keyboard->pressedButton = this;
 	pressed = true;
+	pressed_counter = 0;
+	
+	if(sticky) {
+		if(keyboard->listener != NULL)
+			keyboard->listener->OnKey(GetKeyCode(), true);
+
+	} else {
+		//Press normal keys like normal
+		Trigger();
+	}
 }
 
 void Key::Release()
 {
+	if(pressedByUSB)
+		return;
+	
+	keyboard->pressedButton = NULL;
 	pressed = false;
+
+	//Send the key up event if this key was sticky
+	if(sticky && keyboard->listener != NULL)
+		keyboard->listener->OnKey(GetKeyCode(), false);
+	
+	//If a non-sticky button is released all sticky buttons also get released
+	if(!sticky) {
+		
+		for(int i = 0; i < NUM_KEYS; i++)
+		{
+			Key *key = keyboard->Keys[i];
+			if(key != NULL && key->sticky && key->pressed && !key->pressedByUSB && key != keyboard->capslockKey)//Don't release CapsLock
+				key->Release();
+		}
+	}
 }
 
-bool keyboard_inited = false;
-#include <wiikeyboard/keyboard.h>
 
 
-/**
+/*===========*\
  Character Key
-*/
+\*===========*/
+
+CharacterKey::CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key)
+		: Key(keyboard, x, y, keyboard->buttonTexture->width),
+	key(key),
+	lowercase_texture( GX_Text( (char[2]){key.ch, '\0'} , 20, 0) ),
+	uppercase_texture( GX_Text( (char[2]){key.ucase_ch, '\0'} , 20, 0) )
+{
+}
+
+void CharacterKey::Draw()
+{
+	Key::Draw();
+	
+	GX_Texture *text_texture = keyboard->IsUppercase() ? &uppercase_texture : &lowercase_texture;	
+	text_texture->Draw(keyboard->position_x + x + (keyboard->buttonTexture->width/2 - 7) - grow, keyboard->position_y + y - grow,
+				 text_texture->width + grow*30, text_texture->height + grow*3, keyboard->opacity);
+}
+
+u32 CharacterKey::GetBaseColor()
+{
+	return 0xFFFFFF;
+}
+
 u16 CharacterKey::GetKeyCode()
 {
 	return keyboard->IsUppercase() ? key.ucase_ch : key.ch;
@@ -139,51 +180,17 @@ bool CharacterKey::HasKeyCode(u16 keycode)
 	return key.ch == keycode || key.ucase_ch == keycode;
 }
 
-CharacterKey::CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key)
-: Key(keyboard, x, y, keyboard->buttonTexture->width),
-key(key),
-lowercase_texture( GX_Text( (char[2]){key.ch, '\0'} , 20, 0) ),
-uppercase_texture( GX_Text( (char[2]){key.ucase_ch, '\0'} , 20, 0) )
-{
-	
-}
 
-void CharacterKey::Draw()
-{
-	Key::Draw();
-	
-	GX_Texture *texture = keyboard->buttonTexture;
-	
-	GX_Texture *text_texture = keyboard->IsUppercase() ? &uppercase_texture : &lowercase_texture;
-	
-	text_texture->Draw(keyboard->position_x + x + (texture->width/2 - 7) - grow, keyboard->position_y + y - grow,
-				 text_texture->width + grow*30, text_texture->height + grow*3, keyboard->opacity);
-}
+/*===========*\
+  Command Key
+\*===========*/
 
-u32 CharacterKey::GetBaseColor()
-{
-	return 0xFFFFFF;
-}
-
-void CharacterKey::Release()
-{
-	Key::Release();
-	if(!keyboard->usbShiftPressed && keyboard->shiftKey->pressed) {
-		keyboard->shiftKey->pressed = false;
-		if(keyboard->listener != NULL)
-			keyboard->listener->OnKey(VNC_SHIFTLEFT, false);
-	}
-}
-
-/**
- Command Key
- */
-
-CommandKey::CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code)
-: Key(keyboard, x, y, width),
+CommandKey::CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code, bool sticky=false)
+	: Key(keyboard, x, y, width),
 	text_texture(GX_Text( text, 12, 0)),
 	key_code(key_code)
 {
+	this->sticky = sticky;
 }
 
 void CommandKey::Draw()
@@ -206,48 +213,37 @@ u16 CommandKey::GetKeyCode()
 
 bool CommandKey::HasKeyCode(u16 keycode)
 {
-	return key_code == keycode;
+	return this->key_code == keycode;
 }
 
 
 
-/**
- Shift Key
- */
-ShiftKey::ShiftKey(Keyboard *keyboard, int x, int y, int width, const char* text) :
-CommandKey(keyboard, x, y, width, text, 0)
+/*==============*\
+ Keyboard Listener
+\*==============*/
+
+void KeyboardListener::OnKey(int keycode, bool isDown)
 {
 }
 
-void ShiftKey::Press() {
-	pressed = !pressed;
-	if(keyboard->listener != NULL)
-		keyboard->listener->OnKey(VNC_SHIFTLEFT, pressed);
-}
-void ShiftKey::Update() {
-	Key::Update();
-	click_fade = pressed ? 255 : 0;
-}
-
-void ShiftKey::Release() {
-}
-
-/**
- Keyboard
-*/
+/*===========*\
+   Keyboard
+\*===========*/
 
 Keyboard::Keyboard() :
+	position_x(40),
+	position_y(300),
+	opacity(0),
+	show(false),
 	shiftKey(NULL),
 	capslockKey(NULL),
 	usbShiftPressed(false),
+	pressedButton(NULL),
+	hoverButton(NULL),
 	listener(NULL),
-	opacity(0),
-	position_x(40),
-	position_y(300),
 	buttonTexture(GX_Texture::LoadFromPNG(button))
-
 {
-	//Initialize 
+	//Initialize USB keyboard
 	if(!keyboard_inited) {
 		KEYBOARD_Init(NULL);
 		keyboard_inited = true;
@@ -295,6 +291,7 @@ Keyboard::Keyboard() :
 			x += buttonTexture->width;
 		}
 	}
+
 	//Special extra wide space key
 	Key *spaceKey = new CharacterKey(this, 170, 128, (struct ch_key){' ', ' '});
 	spaceKey->width = 200;
@@ -302,19 +299,19 @@ Keyboard::Keyboard() :
 	
 	//Command Keys (left side)
 	Keys[b++] = new CommandKey(this, 0, 32, 60, "Tab", VNC_TAB);
-	Keys[b++] = capslockKey = new ShiftKey(this, 0, 64, 70, "Capslock");
-	Keys[b++] = shiftKey = new ShiftKey(this, 0, 96, 90, "Shift");
-	Keys[b++] = new CommandKey(this, 0, 128, 60, "Ctrl", VNC_CTRLLEFT);
-	Keys[b++] = new CommandKey(this, 60, 128, 60, "Alt", VNC_ALTLEFT);
-	Keys[b++] = new CommandKey(this, 120, 128, 50, "Meta", VNC_METARIGHT);
+	Keys[b++] = shiftKey = new CommandKey(this, 0, 96, 90, "Shift", VNC_SHIFTLEFT, true);
+	Keys[b++] = capslockKey = new CommandKey(this, 0, 64, 70, "CapsLock", VNC_SHIFTLEFT, true);
+	Keys[b++] = new CommandKey(this, 0, 128, 60, "Ctrl", VNC_CTRLLEFT, true);
+	Keys[b++] = new CommandKey(this, 60, 128, 60, "Alt", VNC_ALTLEFT, true);
+	Keys[b++] = new CommandKey(this, 120, 128, 50, "Meta", VNC_METALEFT, true);
 	
 	//Command Keys (right side)
 	Keys[b++] = new CommandKey(this, 370, 128, 40, "Del", VNC_DELETE);
 	Keys[b++] = new CommandKey(this, 410, 128, 40, "ESC", VNC_ESCAPE);
-	Keys[b++] = new CommandKey(this, 450, 128, 40, "Left", VNC_LEFT);
-	Keys[b++] = new CommandKey(this, 490, 128, 40, "Down", VNC_DOWN);
-	Keys[b++] = new CommandKey(this, 530, 128, 40, "Right", VNC_RIGHT);
-	Keys[b++] = new CommandKey(this, 490, 96, 40, "Up", VNC_UP);
+	Keys[b++] = new CommandKey(this, 460, 128, 40, "Left", VNC_LEFT);
+	Keys[b++] = new CommandKey(this, 500, 128, 40, "Down", VNC_DOWN);
+	Keys[b++] = new CommandKey(this, 540, 128, 40, "Right", VNC_RIGHT);
+	Keys[b++] = new CommandKey(this, 500, 96, 40, "Up", VNC_UP);
 	
 	Keys[b++] = new CommandKey(this, 510, 64, 70, "Return", VNC_ENTER);
 	Keys[b++] = new CommandKey(this, 520, 0, 60, "Backspace", VNC_BACKSPACE);
@@ -400,14 +397,10 @@ u16 keycodeToVNC(u16 keycode) {
 	return keycode;
 }
 
-#define KEYBOARD_APPEAR_SPEED 20
-#define KEYBOARD_DISAPPEAR_SPEED 35
-
 bool Keyboard::Visible()
 {
 	return opacity > 0;
 }
-Key *hoverButton = NULL;
 
 void Keyboard::Show()
 {
@@ -418,20 +411,19 @@ void Keyboard::Show()
 void Keyboard::Hide()
 {
 	hoverButton = NULL;
-	for(int i = 0; i < NUM_KEYS; i++)
-		if(Keys[i] != NULL)
-			Keys[i]->hover = false;
 	show = false;
 }
 
 void Keyboard::Update()
 {
-	if(show && opacity < 255) opacity += KEYBOARD_APPEAR_SPEED;
-	if(!show && opacity > 0) opacity -= KEYBOARD_DISAPPEAR_SPEED;
+	//Fade keyboard in & out
+	if(show) opacity += KEYBOARD_APPEAR_SPEED;
+	else opacity -= KEYBOARD_DISAPPEAR_SPEED;
 	
 	if(opacity > 255) opacity = 255;
-	if(opacity < 0) opacity = 0;
+	if(opacity < 0) opacity = 0;	
 	
+	//Alow all keys to update their state
 	for(int i = 0; i < NUM_KEYS; i++)
 		if(Keys[i] != NULL)
 			Keys[i]->Update();
@@ -456,18 +448,19 @@ void Keyboard::Update()
 		if(keycode == VNC_SHIFTLEFT || keycode == VNC_SHIFTRIGHT)
 			shiftKey->pressed = usbShiftPressed = (ke.type == KEYBOARD_PRESSED);
 
-		
-
 		//Look for a key on the onscreen keyboard to press
 		//(This takes care of the repeating behaviour and also does the yellow flashing)
 		bool foundKey = false;
 		for(int i = 0; i < NUM_KEYS; i++)
 		{
 			if(Keys[i] != NULL && Keys[i]->HasKeyCode(keycode)) {
-				if(isDown)
+				if(isDown) {
 					Keys[i]->Press();
-				else
+					Keys[i]->pressedByUSB = true;
+				} else {
+					Keys[i]->pressedByUSB = false;
 					Keys[i]->Release();
+				}
 				foundKey = true;
 			}
 		}
@@ -477,19 +470,12 @@ void Keyboard::Update()
 			listener->OnKey(keycode, isDown);
 
 	}
-
 }
 
 void Keyboard::Draw()
 {
 	if(opacity == 0)
 		return;
-	
-	//TODO: Temporary debug code
-	 char temp[100];
-	 sprintf(temp, "0x%x", gkeycode);
-	 GX_Text(temp, 40, 0xFFFFFFFF).Draw(30,30);
-	
 	
 	//Draw all the keys
 	for(int i = 0; i < NUM_KEYS; i++)
@@ -513,21 +499,22 @@ bool Keyboard::IsUppercase()
 void Keyboard::OnCursorMove(int x, int y)
 {
 	//Do not update hover information if the user is pressing a key
-	if(pressedButton == NULL) {
+	if(pressedButton == NULL)
 		UpdateHoverButton();
-	}
 }
 
+/**
+ * Update hoverButton & all the Key::hover fields
+ */
 void Keyboard::UpdateHoverButton()
 {
 	hoverButton = NULL;
 	
 	//Update for all keys wether there is a pointer hovering above it
 	for(int i = 0; i < NUM_KEYS; i++) {
-		if(Keys[i] != NULL) {
-			Keys[i]->hover = Keys[i]->IsMouseOver(controller->GetX(), controller->GetY());
-			if(Keys[i]->hover)
-				hoverButton = Keys[i];
+		if(Keys[i] != NULL && Keys[i]->IsMouseOver(controller->GetX(), controller->GetY())) {
+			hoverButton = Keys[i];
+			return;
 		}
 	}
 }
@@ -536,8 +523,6 @@ void Keyboard::SetListener(KeyboardListener *listener)
 {
 	this->listener = listener;
 }
-
-#include <wiikeyboard/wsksymdef.h>
 
 /**
  * User clicks with his pointer
@@ -548,15 +533,30 @@ void Keyboard::OnButton(bool isDown)
 		//Start pressing the key that the user clicked on
 		for(int i = 0; i < NUM_KEYS; i++) {
 			if(Keys[i] != NULL && Keys[i]->IsMouseOver(controller->GetX(), controller->GetY())) {
-				pressedButton = Keys[i];
-				pressedButton->Press();
+				
+				//Toggle sticky buttons
+				if(Keys[i]->sticky) {
+					if(Keys[i]->pressed)
+						Keys[i]->Release();
+					else
+						Keys[i]->Press();
+					
+				//Press normal keys like normal
+				} else
+					Keys[i]->Press();
+				
 				return;
 			}
 		}
+		
+		//If there is an button up event and the user was pressing a key
+		//release that key and update the hoverButton information
 	} else if(pressedButton != NULL) {
-		//Release the key the user last pressed
-		pressedButton->Release();
-		pressedButton = NULL;
+		if(!pressedButton->sticky)
+			pressedButton->Release();
+		else
+			pressedButton = NULL;
+
 		UpdateHoverButton();
 	}
 }
@@ -570,10 +570,9 @@ bool Keyboard::IsMouseOver(int x, int y)
 		return false;
 
 	for(int i = 0; i < NUM_KEYS; i++)
-	{
 		if(Keys[i] != NULL && Keys[i]->IsMouseOver(x, y))
 			return true;
-	}
+
 	return false;
 }
 

@@ -3,8 +3,31 @@
 
 #include "gx.h"
 #include "controller.h"
+#include "freetype.h"
+#include "gfx/button.h"
+#include "controller.h"
+
+#include <wiikeyboard/keyboard.h>
+#include <wiikeyboard/wsksymdef.h>
 class Keyboard;
 
+//How big buttons get upon hovering over it
+#define	BUTTON_GROW_MAX 5
+#define GROW_SPEED 2 //The higher the faster
+
+#define CLICKFADE_SPEED 20
+
+#define PRESS_DELAY 30 //Time key has te be pressed before it starts repeating
+#define PRESS_REPEAT 5 //Time between each repeat
+
+#define HOVER_COLOR 0xbec3d6
+#define CLICK_COLOR 0xf7f726
+#define COMMAND_COLOR 0xAEE9FA
+
+#define KEYBOARD_APPEAR_SPEED 20
+#define KEYBOARD_DISAPPEAR_SPEED 35
+
+//VNC Keycodes for command keys
 #define VNC_HOME		0xff50
 #define VNC_LEFT		0xff51
 #define VNC_UP			0xff52
@@ -40,109 +63,169 @@ class Keyboard;
 #define VNC_ALTRIGHT	0xffea 
 #define VNC_DELETE		0xffff
 
+#define NUM_KEYS 100
 
+//A character / uppercase character pair
 struct ch_key {
 	const char ch;
 	const char ucase_ch;
 };
 
+
+/**
+ * The keys are the clickable buttons that make up the keyboard
+ */
 class Key {
 public:
+	//Position & size of key
 	int x, y, width;
-
-	Keyboard *keyboard;
-
-	bool hover;
-
-	u8 grow;
+	
+	//How yellow the button is
 	int click_fade; // 0 = no color, 255 = CLICK_COLOR
+
+	//Sticky buttons have the property that the key-up and key-down
+	//events can be sent seperately depending on how long the key is pressed
+	bool sticky;
 	
-	int pressed_counter;
+	//Keeps track of if this key is pressed by the USB keyboard
+	//Onscreen keyboard may not release keys that have been pressed by USB keyboard
+	bool pressedByUSB;
+	
+	//Keep track of how long the button has been pressed
+	//(used for repeat functionality when key is depressed longer than normal)
 	bool pressed;
+
+protected:
+	int pressed_counter;
 	
+	//Reference to the keyboard to use for keyboard-wide variables
+	Keyboard *keyboard;
 	
+	//How much bigger the button is than normal
+	u8 grow;
+		
+public:
 	Key(Keyboard *keyboard, int x, int y, int width);
-	~Key();
 	virtual void Update();
 	virtual void Draw();
-	virtual void Press();
-	virtual void Trigger();
-	virtual void Release();
-	virtual u32 GetBaseColor()=0;
 	
-	bool IsMouseOver(int x, int y);
+	virtual void Press();
+	virtual void Release();
+	
 	virtual u16 GetKeyCode()=0;
 	virtual bool HasKeyCode(u16 keycode)=0;
+	bool IsMouseOver(int x, int y);
+protected:
+	virtual u32 GetBaseColor()=0;
+private:
+	virtual void Trigger();
 };
 
+
+
+/**
+ * A key that can be pressed to print a character,
+ * is used for all the dull grey keys.
+ * Note that these keys can change character if shift is pressed
+ */
 class CharacterKey : public Key {
-public:
+private:
+	//Character & uppercase character this key represents
 	struct ch_key key;
+	
+	//Texture chaches for the characters
 	GX_Texture lowercase_texture;
 	GX_Texture uppercase_texture;
+
+public:
 	CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key);
 	void Draw();
 	u16 GetKeyCode();
 	bool HasKeyCode(u16 keycode);
+protected:
 	u32 GetBaseColor();
-	void Release();
 };
 
+/**
+ * Key that doesn't print a character, these are the lightblue keys with text on them.
+ */
 class CommandKey : public Key {
-public:
+private:
 	GX_Texture text_texture;
-	int key_code;
-	CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code);
-	void Draw();
-	u32 GetBaseColor();
-	u16 GetKeyCode();
-	bool HasKeyCode(u16 keycode);
-};
+	int key_code; //Keycode this key sends
 
-class ShiftKey : public CommandKey {
 public:
-	ShiftKey(Keyboard *keyboard, int x, int y, int width, const char* text);
-	void Press();
-	void Release();
-	void Update();
+	CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code, bool sticky);
+	void Draw();
+	bool HasKeyCode(u16 keycode);
+	u16 GetKeyCode();
+protected:
+	u32 GetBaseColor();
 };
 
+
+/**
+ * Interface that can be inherited to listen to all key events
+ */
 class KeyboardListener {
 public:
 	virtual void OnKey(int keycode, bool isDown);
 };
 
 
-#define NUM_KEYS 100
+/**
+ * 
+ */
 class Keyboard : public ControllerListener {
-public:
-	Key *shiftKey;
-	Key *capslockKey;
-	bool usbShiftPressed;
+	friend class Key;
+	friend class CharacterKey;
+	friend class CommandKey;
+	friend class ShiftKey;
 	
-	KeyboardListener *listener;
-	int opacity;
-	bool show;
-
+public:
 	//A reference to the controller so that we can get an up-to-date cursor location
 	//And let it now to where it should send its buttonpresses.
 	//The Controller class fills this field in as soon as it is created
 	//As that class is one of the first to be created we can assume that the controller in this field always exists.
 	static Controller *controller;
 	
-	
+private:
 	int position_x, position_y;
 	
+	//Visibility of keyboard
+	int opacity;
+	
+	//Wether keyboard should be fading in or out
+	bool show;	
+	
+	//Keep track of the shift state of the keyboard
+	//Note that these keys are also stored in Keys array, these are just shortcuts
+	Key *shiftKey;
+	Key *capslockKey;
+	bool usbShiftPressed;
+	
+	//Key that is currently depressed
+	Key* pressedButton;
+	Key *hoverButton;
+
+	//Make sure the USB keyboard only gets initialized ones
+	static bool keyboard_inited;
+	
+	//Object that wants to recieve key events
+	KeyboardListener *listener;
+
+	//Array with all keys, can contain NULL values at the end.
 	Key *Keys[NUM_KEYS];
 	
+	
+	//Texture that is used to display ALL keys (even the ones with another color
 	GX_Texture *buttonTexture;
 	
 
-
+public:
 	Keyboard();
 	~Keyboard();
-	bool IsUppercase();
-	void UpdateHoverButton();
+
 	void Draw();
 	void Update();
 	void Show();
@@ -153,5 +236,9 @@ public:
 	void SetListener(KeyboardListener *listener);
 	void OnButton(bool isDown);
 	bool IsVisible();
+	
+private:
+	bool IsUppercase();
+	void UpdateHoverButton();
 };
 #endif
