@@ -6,6 +6,7 @@
 #include "controller.h"
 #include <rfb/rfbclient.h>
 #include <math.h>
+#include "screen.h"
 
 enum ViewerStatus {
 	VNC_CONNECTING,
@@ -26,7 +27,7 @@ enum ViewerStatus {
 /**
  *	Viewer class that takes care of the actual VNC part of this application
  */
-class Viewer : public ControllerListener, public KeyboardListener {
+class Viewer : public KeyboardListener, public Screen {
 public:
 	Viewer(const char* ip, int port=5900, const char* password = NULL);
 	~Viewer();
@@ -43,7 +44,7 @@ public:
 	void OnZoomIn(bool isDown);
 	void OnZoomOut(bool isDown);
 	void OnHome();
-	void OnCursorMove(int x, int y);
+	void OnMouseMove(int x, int y);
 	void OnKeyboard();	
 	void OnScrollView(int x, int y);
 	
@@ -98,6 +99,7 @@ private:
 
 	//The VNC connection to the server
 	//Thanks libvncclient© for making my life this easy! 
+public:
 	rfbClient *client;
 	
 	lwp_t backgroundthread_handle;

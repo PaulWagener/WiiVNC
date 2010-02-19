@@ -143,6 +143,7 @@ GX_Texture::GX_Texture(int newWidth, int newHeight, u8 newFormat, u8* newBuffer)
 	GX_InitTexObj(&texObj, buffer, width, height, format, GX_CLAMP, GX_CLAMP, GX_FALSE);
 }
 
+#include <stdlib.h>
 GX_Texture::~GX_Texture()
 {
 	if(buffer != NULL)
@@ -187,30 +188,43 @@ GX_Texture* GX_Texture::LoadFromPNG(const void* png) {
  * Opacity is a value from 0 (transparent) to 255 (opaque), defaults to 255
  * TODO: implement rotation
  */
-void GX_Texture::Draw(int x, int y, int drawWidth, int drawHeight, int opacity, int color)
+
+void GX_Texture::Draw(int x, int y, int drawWidth, int drawHeight, int opacity, int degrees, int color)
 {
 	if(drawWidth==-1) drawWidth = width;
 	if(drawHeight==-1) drawHeight = height;
 
+	float halfWidth = drawWidth/(float)2;
+	float halfHeight = drawHeight/(float)2;
+
+	//Translate to center of texture and apply rotation
+	Mtx mt, mr, m;
+	guMtxTrans(mt, x+halfWidth, y+halfHeight, 0);
+	guMtxRotRad (mr, 'z', DegToRad(degrees));
+	guMtxConcat(mt, mr, m);
+	GX_LoadPosMtxImm (m, GX_PNMTX0);
+	
+	
+	//Load texture
 	GX_LoadTexObj(&texObj, GX_TEXMAP0);
 	GX_SetTevOp  (GX_TEVSTAGE0, GX_MODULATE);
 	GX_SetVtxDesc(GX_VA_TEX0,   GX_DIRECT);
 		
 	u32 gxcolor = color << 8 | opacity;
 	GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
-		GX_Position3f32(x, y, 0);
+		GX_Position3f32(-halfWidth, -halfHeight, 0);
 		GX_Color1u32   (gxcolor);
 		GX_TexCoord2f32(0, 0);
 
-        GX_Position3f32(x+drawWidth, y, 0);
+        GX_Position3f32(halfWidth, -halfHeight, 0);
         GX_Color1u32   (gxcolor);
         GX_TexCoord2f32(1, 0);
 
-        GX_Position3f32(x+drawWidth, y+drawHeight, 0);
+        GX_Position3f32(halfWidth, halfHeight, 0);
         GX_Color1u32   (gxcolor);
         GX_TexCoord2f32(1, 1);
 
-        GX_Position3f32(x, y+drawHeight, 0);
+        GX_Position3f32(-halfWidth, halfHeight, 0);
         GX_Color1u32   (gxcolor);
         GX_TexCoord2f32(0, 1);
     GX_End();
@@ -218,6 +232,28 @@ void GX_Texture::Draw(int x, int y, int drawWidth, int drawHeight, int opacity, 
     GX_SetTevOp  (GX_TEVSTAGE0, GX_PASSCLR);
     GX_SetVtxDesc(GX_VA_TEX0,   GX_NONE);
 }
+
+
+void GX_DrawRectangle(int x, int y, int width, int height, int color, u8 opacity)
+{
+	color = color << 8 | opacity;
+	
+	Mtx m;
+	guMtxIdentity(m);
+	GX_LoadPosMtxImm (m, GX_PNMTX0);
+	
+	GX_Begin(GX_TRIANGLEFAN, GX_VTXFMT0, 4);
+	GX_Position3f32(x, y, 0);
+	GX_Color1u32(color);
+	GX_Position3f32(x+width, y, 0);
+	GX_Color1u32(color);
+	GX_Position3f32(x+width, y+height, 0);
+	GX_Color1u32(color);
+	GX_Position3f32(x, y+height, 0);
+	GX_Color1u32(color);
+	GX_End();
+}
+
 
 /**
  *

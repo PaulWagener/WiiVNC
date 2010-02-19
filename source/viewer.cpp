@@ -19,8 +19,13 @@ char* Viewer::ReadPassword(rfbClient* client)
 		//Wait until a password is given to us
 		instance->status = VNC_NEEDPASSWORD;
 			
-		while(instance->password == NULL)
+		while(instance->password == NULL) {
 			usleep(10);
+			
+			//User can quit while entering password
+			if(instance->GetStatus() == VNC_USERQUITTED)
+				return (char*)"";
+		}
 			
 		instance->status = VNC_CONNECTING;
 	}
@@ -32,7 +37,7 @@ char* Viewer::ReadPassword(rfbClient* client)
 /**
  * Method that does all the actual networking with the server in the background
  */
-void* Viewer::BackgroundThread(void* nothing)
+void* Viewer::BackgroundThread(void*)
 {
 	//Start the connection 
 	instance->status = VNC_CONNECTING;
@@ -66,12 +71,10 @@ Viewer::Viewer(const char* ip, int port, const char* newPassword)
 	zooming_in = false;
 	zooming_out = false;
 	screenparts = NULL;
-	keyboard = new Keyboard();
+	keyboard = new Keyboard(30, 400);
 	keyboard->SetListener(this);
 	num_screenparts = 0;
 	
-	cursor_x = SCREEN_XCENTER;
-	cursor_y = SCREEN_YCENTER;
 	cursor_state = 0;
 	
 	//Initialize the remote connetion
@@ -88,6 +91,8 @@ Viewer::Viewer(const char* ip, int port, const char* newPassword)
 
 Viewer::~Viewer()
 {
+	status = VNC_USERQUITTED;
+	
 	//Close the connection
 	rfbClientCleanup(client);
 	
@@ -104,7 +109,7 @@ Viewer::~Viewer()
 		
 		free(screenparts);
 	}
-	
+	//*/
 	instance = NULL;
 }
 
@@ -275,7 +280,7 @@ void Viewer::Update()
 	//Zoom animation
 	if(zooming_in && zoom < max_zoom) {
 		zoom_target += ZOOM_SPEED;
-		struct Point cursorpoint = Screen2VNCPoint(cursor_x, cursor_y);
+		struct Point cursorpoint = Screen2VNCPoint(cursor_y, cursor_x);
 		
 		//While zooming move towards the cursor
 		scrollto_x += (cursorpoint.x - scrollto_x) / 20;
@@ -382,7 +387,7 @@ void Viewer::OnZoomOut(bool isDown)
 
 void Viewer::OnHome()
 {
-	status = VNC_DISCONNECTED;
+	FadeToExit();
 }
 
 void Viewer::OnScrollView(int x, int y)
@@ -391,7 +396,7 @@ void Viewer::OnScrollView(int x, int y)
 	scrollto_y -= y;
 }
 
-void Viewer::OnCursorMove(int x, int y)
+void Viewer::OnMouseMove(int x, int y)
 {
 	cursor_x = x;
 	cursor_y = y;
@@ -408,6 +413,47 @@ void Viewer::OnKeyboard()
 	}
 }
 
+
+u16 keycodeToVNC(u16 keycode) {
+	switch(keycode) {
+		case KS_Home:		return VNC_HOME;
+		case KS_End:		return VNC_END;
+		case KS_Left:		return VNC_LEFT;
+		case KS_Right:		return VNC_RIGHT;
+		case KS_Up:			return VNC_UP;
+		case KS_Down:		return VNC_DOWN;
+		case KS_Prior:		return VNC_PAGE_UP;
+		case KS_Next:		return VNC_PAGE_DOWN;
+		case KS_Insert:		return VNC_INSERT;
+		case KS_Delete:		return VNC_DELETE;
+		case KS_f1:			return VNC_F1;
+		case KS_f2:			return VNC_F1;
+		case KS_f3:			return VNC_F3;
+		case KS_f4:			return VNC_F4;
+		case KS_f5:			return VNC_F5;
+		case KS_f6:			return VNC_F6;
+		case KS_f7:			return VNC_F7;
+		case KS_f8:			return VNC_F8;
+		case KS_f9:			return VNC_F9;
+		case KS_f10:		return VNC_F10;
+		case KS_f11:		return VNC_F11;
+		case KS_f12:		return VNC_F12;
+		case KS_BackSpace:	return VNC_BACKSPACE;
+		case KS_Tab:		return VNC_TAB;
+		case KS_Return:		return VNC_ENTER;
+		case KS_Escape:		return VNC_ESCAPE;
+		case KS_Shift_L:	return VNC_SHIFTLEFT;
+		case KS_Shift_R:	return VNC_SHIFTRIGHT;
+		case KS_Control_L:	return VNC_CTRLLEFT;
+		case KS_Control_R:	return VNC_CTRLRIGHT;
+		case KS_Meta_L:		return VNC_METALEFT;
+		case KS_Meta_R:		return VNC_METARIGHT;
+		case KS_Alt_L:		return VNC_ALTLEFT;
+		case KS_Alt_R:		return VNC_ALTRIGHT;
+	}
+	return keycode;
+}
+
 void Viewer::OnKey(int keycode, bool isDown) {
-	SendKeyEvent(client,keycode, isDown);
+	SendKeyEvent(client, keycodeToVNC(keycode), isDown);
 }

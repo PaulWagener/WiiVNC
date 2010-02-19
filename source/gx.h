@@ -27,9 +27,10 @@ public:
 	//Texture buffer in the specified format
 	u8* buffer;
 
-	GX_Texture(int width=0, int height=0, u8 format=GX_TF_RGBA8, u8* buffer=NULL);
+	GX_Texture(int width, int height, u8 format=GX_TF_RGBA8, u8* buffer=NULL);
 	~GX_Texture();
-	void Draw(int x, int y, int width=-1, int height=-1, int opacity=255, int color=0xFFFFFF);
+    	
+	void Draw(int x, int y, int width=-1, int height=-1, int opacity=255, int degrees=0, int color=0xFFFFFF);
 	void Flush();
 	
 	static GX_Texture* LoadFromPNG(const void* png);
@@ -38,6 +39,7 @@ private:
 	GXTexObj texObj;
 };
 
+void GX_DrawRectangle(int x, int y, int width, int height, int color, u8 opacity=255);
 int GX_Initialize();
 void GX_Render();
 

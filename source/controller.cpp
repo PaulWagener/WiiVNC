@@ -9,9 +9,11 @@ void ControllerListener::OnScrollDown() {}
 void ControllerListener::OnZoomIn(bool isDown) {}
 void ControllerListener::OnZoomOut(bool isDown) {}
 void ControllerListener::OnHome() {}
-void ControllerListener::OnCursorMove(int x, int y) {}
+void ControllerListener::OnMouseMove(int x, int y) {}
 void ControllerListener::OnKeyboard() {}
 void ControllerListener::OnScrollView(int x, int y) {}
+
+Controller* Controller::_instance = NULL;
 
 #include <ogc/usbmouse.h>
 Controller::Controller() :
@@ -21,8 +23,6 @@ Controller::Controller() :
 	cursor_texture(GX_Texture::LoadFromPNG(cursor_default)),
 	keyboard(NULL)
 {
-	Keyboard::controller = this;
-	
 	//Init controllers
 	PAD_Init();
 	WPAD_Init();
@@ -104,9 +104,6 @@ void Controller::Update()
 		if(listener != NULL) {
 			if(keyboard != NULL && wpad_up & WPAD_BUTTON_A) keyboard->OnButton(false);
 			
-			
-			if(wpad_down & WPAD_BUTTON_A) listener->OnButton(true);
-			if(wpad_up & WPAD_BUTTON_A) listener->OnButton(false);
 			if(wpad_down & WPAD_BUTTON_B) listener->OnSecondaryButton(true);
 			if(wpad_up & WPAD_BUTTON_B) listener->OnSecondaryButton(false);
 			
@@ -205,17 +202,24 @@ void Controller::Update()
 	if(y > SCREEN_HEIGHT) y = SCREEN_HEIGHT;
 	
 	if(focus_listener != NULL && (x != previous_x || y != previous_y))
-		focus_listener->OnCursorMove(x, y);
+		focus_listener->OnMouseMove(x, y);
+}
+
+Controller* Controller::instance()
+{
+	if(_instance == NULL)
+		_instance = new Controller();
+	return _instance;
 }
 
 int Controller::GetX()
 {
-	return x;
+	return _instance->x;
 }
 
 int Controller::GetY()
 {
-	return y;
+	return _instance->y;
 }
 
 void Controller::SetListener(ControllerListener *listener)

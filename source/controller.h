@@ -21,7 +21,7 @@ public:
 	virtual void OnZoomIn(bool isDown);
 	virtual void OnZoomOut(bool isDown);
 	virtual void OnHome();
-	virtual void OnCursorMove(int x, int y);
+	virtual void OnMouseMove(int x, int y);
 	virtual void OnKeyboard();	
 	virtual void OnScrollView(int x, int y);	
 };
@@ -31,16 +31,15 @@ public:
  * handles all cursor events
  */
 class Controller {
-public:
-	
-	Controller();
-	~Controller();
+public:	
 	void Update();
 	void Draw();
 	void SetListener(ControllerListener *listener);
 	void SetKeyboard(Keyboard *keyboard);
-	int GetX();
-	int GetY();
+	static int GetX();
+	static int GetY();
+	static Controller* instance();
+
 private:
 	//Current cursor location
 	int x, y;
@@ -55,6 +54,10 @@ private:
 	GX_Texture *cursor_texture;
 	
 	Keyboard *keyboard;
+	
+	Controller();
+	~Controller();
+	static Controller *_instance;
 };
 
 #include "keyboard.h"

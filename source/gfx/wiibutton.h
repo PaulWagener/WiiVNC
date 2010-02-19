@@ -4,11 +4,11 @@ Visit http://www.devkitpro.org
 */
 
 //---------------------------------------------------------------------------------
-#ifndef _button_h_
-#define _button_h_
+#ifndef _wiibutton_h_
+#define _wiibutton_h_
 //---------------------------------------------------------------------------------
-extern const unsigned char button[];
-extern const int button_size;
+extern const unsigned char wiibutton[];
+extern const int wiibutton_size;
 //---------------------------------------------------------------------------------
-#endif //_button_h_
+#endif //_wiibutton_h_
 //---------------------------------------------------------------------------------

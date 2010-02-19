@@ -1,6 +1,107 @@
 #include "keyboard.h"
+#include "common.h"
 
-Controller *Keyboard::controller = NULL;
+//A character / uppercase character pair
+struct ch_key {
+	const char ch;
+	const char ucase_ch;
+};
+
+/**
+ * The keys are the clickable buttons that make up the keyboard
+ */
+class Key {
+public:
+	//Position & size of key
+	int x, y, width;
+	
+	//How yellow the button is
+	int click_fade; // 0 = no color, 255 = CLICK_COLOR
+	
+	//Sticky buttons have the property that the key-up and key-down
+	//events can be sent seperately depending on how long the key is pressed
+	bool sticky;
+	
+public:
+	//Keeps track of if this key is pressed by the USB keyboard
+	//Onscreen keyboard may not release keys that have been pressed by USB keyboard
+	bool pressedByUSB;
+	
+	//Keep track of how long the button has been pressed
+	//(used for repeat functionality when key is depressed longer than normal)
+	bool pressed;
+	
+protected:
+	int pressed_counter;
+	
+	//Reference to the keyboard to use for keyboard-wide variables
+	Keyboard *keyboard;
+	
+	//How much bigger the button is than normal
+	u8 grow;
+	
+public:
+	Key(Keyboard *keyboard, int x, int y, int width);
+	virtual void Update();
+	virtual void Draw();
+	
+	virtual void Press();
+	virtual void Release();
+	
+	virtual u16 GetKeyCode()=0;
+	virtual bool HasKeyCode(u16 keycode)=0;
+	bool IsMouseOver(int x, int y);
+protected:
+	virtual u32 GetBaseColor()=0;
+private:
+	virtual void Trigger();
+};
+
+
+
+/**
+ * A key that can be pressed to print a character,
+ * is used for all the dull grey keys.
+ * Note that these keys can change character if shift is pressed
+ */
+class CharacterKey : public Key {
+private:
+	//Character & uppercase character this key represents
+	struct ch_key key;
+	
+	//Texture chaches for the characters
+	GX_Texture *lowercase_texture;
+	GX_Texture *uppercase_texture;
+	
+public:
+	CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key);
+	~CharacterKey();
+	void Draw();
+	u16 GetKeyCode();
+	bool HasKeyCode(u16 keycode);
+protected:
+	u32 GetBaseColor();
+};
+
+/**
+ * Key that doesn't print a character, these are the lightblue keys with text on them.
+ */
+class CommandKey : public Key {
+private:
+	GX_Texture *text_texture;
+	int key_code; //Keycode this key sends
+	
+public:
+	CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code, bool sticky);
+	~CommandKey();
+	void Draw();
+	bool HasKeyCode(u16 keycode);
+	u16 GetKeyCode();
+protected:
+	u32 GetBaseColor();
+};
+
+
 bool Keyboard::keyboard_inited = false;
 
 
@@ -64,18 +165,6 @@ void Key::Trigger()
 }
 
 
-//Color animation functions
-u8 tween(u8 v1, u8 v2, float progress) {
-	return v1 + (v2 - v1) * progress;
-}
-
-u32 colortween(u32 from_color, u32 to_color, float progress) {
-	return tween(from_color, to_color, progress) |
-			(tween(from_color >> 8, to_color >> 8, progress) << 8) |
-			(tween(from_color >> 16, to_color >> 16, progress) << 16) |
-			(tween(from_color >> 24, to_color >> 24, progress) << 24);
-}
-
 /**
  * Draws the generic key background
  */
@@ -86,7 +175,7 @@ void Key::Draw()
 	
 	GX_Texture *texture = keyboard->buttonTexture;
 	texture->Draw(keyboard->position_x + x - grow, keyboard->position_y + y - grow,
-				  width + grow*2, texture->height + grow*2, keyboard->opacity, color);
+				  width + grow*2, texture->height + grow*2, keyboard->opacity, 0, color);
 }
 
 /**
@@ -156,13 +245,19 @@ CharacterKey::CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key)
 {
 }
 
+CharacterKey::~CharacterKey()
+{
+	delete lowercase_texture;
+	delete uppercase_texture;
+}
+
 void CharacterKey::Draw()
 {
 	Key::Draw();
 	
-	GX_Texture *text_texture = keyboard->IsUppercase() ? &uppercase_texture : &lowercase_texture;	
+	GX_Texture *text_texture = keyboard->IsUppercase() ? uppercase_texture : lowercase_texture;	
 	text_texture->Draw(keyboard->position_x + x + (keyboard->buttonTexture->width/2 - 7) - grow, keyboard->position_y + y - grow,
-				 text_texture->width + grow*30, text_texture->height + grow*3, keyboard->opacity);
+				 text_texture->width + grow, text_texture->height + grow*3, keyboard->opacity);
 }
 
 u32 CharacterKey::GetBaseColor()
@@ -193,12 +288,17 @@ CommandKey::CommandKey(Keyboard *keyboard, int x, int y, int width, const char* 
 	this->sticky = sticky;
 }
 
+CommandKey::~CommandKey()
+{
+	delete text_texture;
+}
+
 void CommandKey::Draw()
 {
 	Key::Draw();
 	
-	text_texture.Draw(keyboard->position_x + x + 5 - grow, keyboard->position_y + y - grow,
-						   text_texture.width + grow*30, text_texture.height + grow*2, keyboard->opacity);
+	text_texture->Draw(keyboard->position_x + x + 5 - grow, keyboard->position_y + y - grow,
+						   text_texture->width + grow*2, text_texture->height + grow*2, keyboard->opacity);
 }
 
 u32 CommandKey::GetBaseColor()
@@ -213,6 +313,10 @@ u16 CommandKey::GetKeyCode()
 
 bool CommandKey::HasKeyCode(u16 keycode)
 {
+	//Map both shifts onto one key
+	if(keycode == KS_Shift_R && this->key_code == KS_Shift_L) 
+		return true;
+	
 	return this->key_code == keycode;
 }
 
@@ -230,9 +334,9 @@ void KeyboardListener::OnKey(int keycode, bool isDown)
    Keyboard
 \*===========*/
 
-Keyboard::Keyboard() :
-	position_x(40),
-	position_y(300),
+Keyboard::Keyboard(int position_x, int position_y, KeyboardType type) :
+	position_x(position_x),
+	position_y(position_y),
 	opacity(0),
 	show(false),
 	shiftKey(NULL),
@@ -240,7 +344,7 @@ Keyboard::Keyboard() :
 	pressedButton(NULL),
 	hoverButton(NULL),
 	listener(NULL),
-	buttonTexture(GX_Texture::LoadFromPNG(button))
+	buttonTexture(GX_Texture::LoadFromPNG(key))
 {
 	//Initialize USB keyboard
 	if(!keyboard_inited) {
@@ -250,7 +354,7 @@ Keyboard::Keyboard() :
 	
 	//Notify the controller that this is the latest keyboard
 	//(used for ignoring mouse movements above keyboard)
-	controller->SetKeyboard(this);
+	Controller::instance()->SetKeyboard(this);
 	
 	for(int i = 0; i < NUM_KEYS; i++)
 		Keys[i] = NULL;	
@@ -262,11 +366,11 @@ Keyboard::Keyboard() :
 		{70, 64},
 		{90, 96},
 	};
-	const struct ch_key keys[][13] = {{
+	const struct ch_key full_keys[4][13] = {{
 		{'`','~'}, {'1','!'}, {'2','@'}, {'3','#'},	{'4','$'}, {'5','%'}, {'6','^'},
 		{'7','&'}, {'8','*'}, {'9','('}, {'0',')'}, {'-','_'}, {'=','+'}
 	}, {
-		{'q','Q'}, {'w','W'}, {'e','E'}, {'r','R'}, {'t','T'}, {'y','Y'}, {'u','U'},
+		{'q','Q'}, {'w', 'W'}, {'e','E'}, {'r','R'}, {'t','T'}, {'y','Y'}, {'u','U'},
 		{'i','I'}, {'o','O'}, {'p','P'}, {'[','{'}, {']','}'}, {'\\', '|'}
 	}, {
 		{'a', 'A'}, {'s', 'S'}, {'d', 'D'}, {'f', 'F'}, {'g', 'G'}, {'h', 'H'},
@@ -276,6 +380,14 @@ Keyboard::Keyboard() :
 		{'n', 'N'}, {'m', 'M'}, {',', '<'}, {'.', '>'},
 		{'/', '?'}
 	}};
+	
+	const struct ch_key alpha_keys[4][13] = 
+		{{{0, 0}, {'1',0}, {'2',0}, {'3',0}, {'4',0}, {'5',0}, {'6',0}, {'7',0}, {'8',0}, {'9',0}, {'0',0}},
+		{{'q','Q'}, {'w', 'W'}, {'e','E'}, {'r','R'}, {'t','T'}, {'y','Y'}, {'u','U'}, {'i','I'}, {'o','O'}, {'p','P'}},
+		{{'a', 'A'}, {'s', 'S'}, {'d', 'D'}, {'f', 'F'}, {'g', 'G'}, {'h', 'H'}, {'j', 'J'}, {'k', 'K'}, {'l', 'L'}},
+		{{'z', 'Z'}, {'x', 'X'}, {'c', 'C'}, {'v', 'V'}, {'b', 'B'}, {'n', 'N'}, {'m', 'M'}, {'.', 0}}};
+	
+	const struct ch_key (&keys)[4][13] = type == ALPHA_NUMERIC? alpha_keys : full_keys;
 	
 	int b = 0;
 	for(unsigned int row = 0; row < sizeof(keys) / sizeof(keys[0]); row++) {
@@ -296,24 +408,30 @@ Keyboard::Keyboard() :
 	spaceKey->width = 200;
 	Keys[b++] = spaceKey;
 	
-	//Command Keys (left side)
-	Keys[b++] = new CommandKey(this, 0, 32, 60, "Tab", VNC_TAB);
-	Keys[b++] = shiftKey = new CommandKey(this, 0, 96, 90, "Shift", VNC_SHIFTLEFT, true);
-	Keys[b++] = capslockKey = new CommandKey(this, 0, 64, 70, "CapsLock", VNC_SHIFTLEFT, true);
-	Keys[b++] = new CommandKey(this, 0, 128, 60, "Ctrl", VNC_CTRLLEFT, true);
-	Keys[b++] = new CommandKey(this, 60, 128, 60, "Alt", VNC_ALTLEFT, true);
-	Keys[b++] = new CommandKey(this, 120, 128, 50, "Meta", VNC_METALEFT, true);
+	if(type == FULL || type == TEXT)
+	{
+		Keys[b++] = shiftKey = new CommandKey(this, 0, 96, 90, "Shift", KS_Shift_L, true);
+		Keys[b++] = capslockKey = new CommandKey(this, 0, 64, 70, "CapsLock", KS_Shift_L, true);
+	}
 	
-	//Command Keys (right side)
-	Keys[b++] = new CommandKey(this, 370, 128, 40, "Del", VNC_DELETE);
-	Keys[b++] = new CommandKey(this, 410, 128, 40, "ESC", VNC_ESCAPE);
-	Keys[b++] = new CommandKey(this, 460, 128, 40, "Left", VNC_LEFT);
-	Keys[b++] = new CommandKey(this, 500, 128, 40, "Down", VNC_DOWN);
-	Keys[b++] = new CommandKey(this, 540, 128, 40, "Right", VNC_RIGHT);
-	Keys[b++] = new CommandKey(this, 500, 96, 40, "Up", VNC_UP);
+	if(type == FULL) {
+		//Command Keys (left side)
+		Keys[b++] = new CommandKey(this, 0, 32, 60, "Tab", KS_Tab);
+		Keys[b++] = new CommandKey(this, 0, 128, 60, "Ctrl", KS_Control_L, true);
+		Keys[b++] = new CommandKey(this, 60, 128, 60, "Alt", KS_Alt_L, true);
+		Keys[b++] = new CommandKey(this, 120, 128, 50, "Meta", KS_Meta_L, true);
 	
-	Keys[b++] = new CommandKey(this, 510, 64, 70, "Return", VNC_ENTER);
-	Keys[b++] = new CommandKey(this, 520, 0, 60, "Backspace", VNC_BACKSPACE);
+		//Command Keys (right side)
+		Keys[b++] = new CommandKey(this, 410, 128, 40, "ESC", KS_Escape);
+		Keys[b++] = new CommandKey(this, 500, 96, 40, "Up", KS_Up);
+		Keys[b++] = new CommandKey(this, 500, 128, 40, "Down", KS_Down);
+		Keys[b++] = new CommandKey(this, 510, 64, 70, "Return", KS_Return);
+	}
+	
+	Keys[b++] = new CommandKey(this, type == ALPHA_NUMERIC ? 440 : 520, 0, 60, "Backspace", KS_BackSpace);
+	Keys[b++] = new CommandKey(this, 370, 128, 40, "Del", KS_Delete);
+	Keys[b++] = new CommandKey(this, type == FULL ? 460 : 90, 128, 40, "Left", KS_Left);
+	Keys[b++] = new CommandKey(this, type == FULL ? 540 : 130, 128, 40, "Right", KS_Right);
 }
 
 Keyboard::~Keyboard() {
@@ -323,77 +441,7 @@ Keyboard::~Keyboard() {
 			delete Keys[i];
 
 	delete buttonTexture;
-	controller->SetKeyboard(NULL);
-}
-
-	
-u16 keycodeToVNC(u16 keycode) {
-	switch(keycode) {
-		case KS_Home:		return VNC_HOME;
-		case KS_End:		return VNC_END;
-		case KS_Left:		return VNC_LEFT;
-		case KS_Right:		return VNC_RIGHT;
-		case KS_Up:			return VNC_UP;
-		case KS_Down:		return VNC_DOWN;
-		case KS_Prior:		return VNC_PAGE_UP;
-		case KS_Next:		return VNC_PAGE_DOWN;
-		case KS_Insert:		return VNC_INSERT;
-		case KS_Delete:		return VNC_DELETE;
-		case KS_f1:			return VNC_F1;
-		case KS_f2:			return VNC_F1;
-		case KS_f3:			return VNC_F3;
-		case KS_f4:			return VNC_F4;
-		case KS_f5:			return VNC_F5;
-		case KS_f6:			return VNC_F6;
-		case KS_f7:			return VNC_F7;
-		case KS_f8:			return VNC_F8;
-		case KS_f9:			return VNC_F9;
-		case KS_f10:		return VNC_F10;
-		case KS_f11:		return VNC_F11;
-		case KS_f12:		return VNC_F12;
-		case KS_BackSpace:	return VNC_BACKSPACE;
-		case KS_Tab:		return VNC_TAB;
-		case KS_Return:		return VNC_ENTER;
-		case KS_Escape:		return VNC_ESCAPE;
-		case KS_Shift_L:	return VNC_SHIFTLEFT;
-		case KS_Shift_R:	return VNC_SHIFTRIGHT;
-		case KS_Control_L:	return VNC_CTRLLEFT;
-		case KS_Control_R:	return VNC_CTRLRIGHT;
-		case KS_Meta_L:		return VNC_METALEFT;
-		case KS_Meta_R:		return VNC_METARIGHT;
-		case KS_Alt_L:		return VNC_ALTLEFT;
-		case KS_Alt_R:		return VNC_ALTRIGHT;
-		
-		//US Localization (row 1)
-		case KS_at:			return '`';
-		case KS_section:	return '~';
-		case KS_quotedbl:	return '@';
-		case KS_ampersand:	return '^';
-		case KS_underscore:	return '&';
-		case KS_parenleft:	return '*';
-		case KS_parenright:	return '(';
-		case KS_apostrophe:	return ')';
-		case KS_slash:		return '-';
-		case KS_question:	return '_';
-		case KS_degree:		return '=';
-		
-		//US Localization (row 2)
-		case KS_asterisk:	return ']';
-		case KS_bar:		return '}';
-		case KS_less:		return '\\';
-		case KS_greater:	return '|';
-		
-		//US Localization (row 3)
-		case KS_plus:		return ';';
-		case KS_plusminus:	return ':';	
-			
-		//US Localization (row 4)
-		case KS_semicolon:	return '<';
-		case KS_colon:		return '>';
-		case KS_minus:		return '/';
-		case KS_equal:		return '?';
-	}
-	return keycode;
+	Controller::instance()->SetKeyboard(NULL);
 }
 
 bool Keyboard::Visible()
@@ -411,6 +459,41 @@ void Keyboard::Hide()
 {
 	hoverButton = NULL;
 	show = false;
+}
+
+u16 localizeKeycode(u16 keycode)
+{
+	switch(keycode) {
+		//US Localization (row 1)
+		case KS_at:			return '`';
+		case KS_section:	return '~';
+		case KS_quotedbl:	return '@';
+		case KS_ampersand:	return '^';
+		case KS_underscore:	return '&';
+		case KS_parenleft:	return '*';
+		case KS_parenright:	return '(';
+		case KS_apostrophe:	return ')';
+		case KS_slash:		return '-';
+		case KS_question:	return '_';
+		case KS_degree:		return '=';
+			
+			//US Localization (row 2)
+		case KS_asterisk:	return ']';
+		case KS_bar:		return '}';
+		case KS_less:		return '\\';
+		case KS_greater:	return '|';
+			
+			//US Localization (row 3)
+		case KS_plus:		return ';';
+		case KS_plusminus:	return ':';	
+			
+			//US Localization (row 4)
+		case KS_semicolon:	return '<';
+		case KS_colon:		return '>';
+		case KS_minus:		return '/';
+		case KS_equal:		return '?';
+	}
+	return keycode;
 }
 
 void Keyboard::Update()
@@ -437,7 +520,7 @@ void Keyboard::Update()
 		
 		bool isDown = ke.type == KEYBOARD_PRESSED;
 
-		u16 keycode = keycodeToVNC(ke.symbol);
+		u16 keycode = localizeKeycode(ke.symbol);
 		
 		//Look for a key on the onscreen keyboard to press
 		//(This takes care of the repeating behaviour and also does the yellow flashing)
@@ -482,13 +565,16 @@ void Keyboard::Draw()
 
 bool Keyboard::IsUppercase()
 {
+	if(shiftKey == NULL || capslockKey == NULL)
+		return false;
+	
 	return shiftKey->pressed || capslockKey->pressed;
 }
 
 /**
  * Update which key has the mouse hovering above it
  */
-void Keyboard::OnCursorMove(int x, int y)
+void Keyboard::OnMouseMove(int x, int y)
 {
 	//Do not update hover information if the user is pressing a key
 	if(pressedButton == NULL)
@@ -504,7 +590,7 @@ void Keyboard::UpdateHoverButton()
 	
 	//Update for all keys wether there is a pointer hovering above it
 	for(int i = 0; i < NUM_KEYS; i++) {
-		if(Keys[i] != NULL && Keys[i]->IsMouseOver(controller->GetX(), controller->GetY())) {
+		if(Keys[i] != NULL && Keys[i]->IsMouseOver(Controller::GetX(), Controller::GetY())) {
 			hoverButton = Keys[i];
 			return;
 		}
@@ -524,7 +610,7 @@ void Keyboard::OnButton(bool isDown)
 	if(isDown) {
 		//Start pressing the key that the user clicked on
 		for(int i = 0; i < NUM_KEYS; i++) {
-			if(Keys[i] != NULL && Keys[i]->IsMouseOver(controller->GetX(), controller->GetY())) {
+			if(Keys[i] != NULL && Keys[i]->IsMouseOver(Controller::GetX(), Controller::GetY())) {
 				
 				//Toggle sticky buttons
 				if(Keys[i]->sticky) {
