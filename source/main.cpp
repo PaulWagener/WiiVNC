@@ -12,7 +12,7 @@
 #include "controller.h"
 #include "keyboard.h"
 #include "mainscreen.h"
-
+#include "language.h"
 
 static Screen *currentScreen = NULL;
 
@@ -43,10 +43,18 @@ void FadeToExit()
 	fadeToExit = SYS_SHUTDOWN;
 }
 
+void FadeToRestart()
+{
+	fadeToExit = SYS_HOTRESET;
+}
+
 #define FADEOUT_SPEED 10
 #define FADEIN_SPEED 10
 
 int main(int argc, char **argv) {
+	
+	InitializeLanguage();
+	
 	//Initialize graphics
 	GX_Initialize();
 	GX_InitFreetype();	
@@ -94,7 +102,6 @@ int main(int argc, char **argv) {
 		//Actually change the screen when nothing is visible
 		if((fadeTo != NULL || fadeToExit) && fadeOpacity == 255) {
 			if(fadeToExit) {
-				//KEYBOARD_Deinit();
 				SYS_ResetSystem(fadeToExit, 0, 0);
 				return 0;
 			}

@@ -3,10 +3,12 @@
 
 Viewer *Viewer::instance = NULL;
 
-Viewer::ScreenPart::ScreenPart(int theOffset_x, int theOffset_y, int theWidth, int theHeight) : GX_Texture(theWidth, theHeight)
+Viewer::ScreenPart::ScreenPart(int offset_x, int offset_y, int width, int height) : 
+	GX_Texture(width, height),
+	offset_x(offset_x),
+	offset_y(offset_y)
 {
-	offset_x = theOffset_x;
-	offset_y = theOffset_y;
+	return;
 }
 
 /**
@@ -24,12 +26,11 @@ char* Viewer::ReadPassword(rfbClient* client)
 			
 			//User can quit while entering password
 			if(instance->GetStatus() == VNC_USERQUITTED)
-				return (char*)"";
+				return strdup("");
 		}
 			
 		instance->status = VNC_CONNECTING;
 	}
-
 
 	return strdup(instance->password);
 }
@@ -58,25 +59,23 @@ void* Viewer::BackgroundThread(void*)
 	return 0;
 }
 
-Viewer::Viewer(const char* ip, int port, const char* newPassword)
+Viewer::Viewer(const char* ip, int port, const char* password) :
+	password(password),	
+	status(VNC_CONNECTING),	
+	screenparts(NULL),
+	num_screenparts(0),
+	width(0),
+	height(0),
+	zooming_in(false),
+	zooming_out(false),
+	keyboard(new Keyboard(30, 300, FULL)),
+	cursor_state(0)
 {
 	if (instance != NULL)
 		throw "There can only be one viewer instance";
 		
 	instance = this;
-	this->status = VNC_CONNECTING;
-	password = newPassword;
-	width = 0;
-	height = 0;
-	zooming_in = false;
-	zooming_out = false;
-	screenparts = NULL;
-	keyboard = new Keyboard(30, 400);
-	keyboard->SetListener(this);
-	num_screenparts = 0;
-	
-	cursor_state = 0;
-	
+
 	//Initialize the remote connetion
 	client=rfbGetClient(8,3,4);
 	client->programName = "WiiVNC";
@@ -92,6 +91,8 @@ Viewer::Viewer(const char* ip, int port, const char* newPassword)
 Viewer::~Viewer()
 {
 	status = VNC_USERQUITTED;
+	
+	delete keyboard;
 	
 	//Close the connection
 	rfbClientCleanup(client);
@@ -116,6 +117,11 @@ Viewer::~Viewer()
 ViewerStatus Viewer::GetStatus()
 {
 	return status;
+}
+
+const char* Viewer::GetHost()
+{
+	return client->serverHost;
 }
 
 //How much border there is between screenedge and vnc in most zoomedout state
@@ -263,8 +269,7 @@ void Viewer::Draw()
 	}
 	
 	//Draw keyboard
-	if(keyboard)
-		keyboard->Draw();
+	keyboard->Draw();
 }
 
 
@@ -277,10 +282,13 @@ bool closetozero(double var)
 
 void Viewer::Update()
 {
+	Controller::instance()->SetKeyboard(keyboard);
+	keyboard->SetListener(this);
+	
 	//Zoom animation
 	if(zooming_in && zoom < max_zoom) {
 		zoom_target += ZOOM_SPEED;
-		struct Point cursorpoint = Screen2VNCPoint(cursor_y, cursor_x);
+		struct Point cursorpoint = Screen2VNCPoint(Controller::GetX(), Controller::GetY());
 		
 		//While zooming move towards the cursor
 		scrollto_x += (cursorpoint.x - scrollto_x) / 20;
@@ -321,14 +329,16 @@ void Viewer::Update()
 	if(!closetozero(scrolldiff_x) || !closetozero(scrolldiff_y) || !closetozero(zoom_diff))
 		SendPointer();
 	
-	if(keyboard)
-		keyboard->Update();
+	keyboard->Update();
+	
+	if(GetStatus() == VNC_DISCONNECTED && !Fading())
+		FadeToExit();
 }
 
 void Viewer::SendPointer()
 {
 	if(status == VNC_CONNECTED) {
-		struct Point cursor = Screen2VNCPoint(cursor_x, cursor_y);
+		struct Point cursor = Screen2VNCPoint(Controller::GetX(), Controller::GetY());
 		SendPointerEvent(client, cursor.x, cursor.y, cursor_state);
 	}
 }
@@ -398,8 +408,6 @@ void Viewer::OnScrollView(int x, int y)
 
 void Viewer::OnMouseMove(int x, int y)
 {
-	cursor_x = x;
-	cursor_y = y;
 	SendPointer();
 }
 

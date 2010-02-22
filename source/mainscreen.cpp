@@ -1,13 +1,10 @@
 #include "mainscreen.h"
 #include <network.h>
 #include <errno.h>
-#include "freetype.h"
-#include "textbox.h"
+#include <fat.h>
+#include <sys/dir.h>
 
-#include "common.h"
-#include "button.h"
-#include "gfx/throbber.h"
-
+#include "language.h"
 #define BUTTON_WIDTH 200
 #define BUTTON_HEIGHT 40
 
@@ -15,6 +12,79 @@
 network_status MainScreen::networkStatus = NO_NETWORK;
 lwp_t MainScreen::networkThread;
 
+bool fatInited = false;
+FILE* openFile(const char* mode)
+{
+	if(!fatInited && fatInitDefault())
+		fatInited = true;
+	   
+	if(fatInited) {
+		DIR_ITER *homeDir = diropen("sd:/apps/wiivnc");
+	   
+		const char* filename;
+		if(homeDir != NULL)
+		{
+			filename = "sd:/apps/wiivnc/ip.txt";
+			dirclose(homeDir);
+		} else {
+			filename = "sd:/wiivnc.txt";
+		}
+		
+		return fopen(filename, mode);
+	}
+	return NULL;
+}
+
+MainScreen::MainScreen() :
+	titleText(GX_Text("WiiVNC", 80, 0xFFFFFF)),
+	initializingText(GX_Text(TEXT_InitializingNetwork, 20, 0xFFFFFF)),
+	noNetworkText(GX_Text(TEXT_CouldNotConnect, 18, 0xFFFFFF)),
+	throbberTexture(GX_Texture::LoadFromPNG(throbber)),
+
+	addressTextbox(new Textbox((int)(SCREEN_WIDTH*0.05), 150, (int)(SCREEN_WIDTH*0.6), 40)),
+	portTextbox(new Textbox((int)(SCREEN_WIDTH*0.7), 150, (int)(SCREEN_WIDTH*0.15), 40)),
+	mainKeyboard(new Keyboard(50, 220, ALPHA_NUMERIC)),
+
+	exitButton(new Button(SCREEN_XCENTER - BUTTON_WIDTH - 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, TEXT_Exit)),
+	connectButton(new Button(SCREEN_XCENTER + 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, TEXT_Connect)),
+	throbberRotation(0)
+{
+	//Start initializing the network
+	if(networkStatus == NO_NETWORK)
+		LWP_CreateThread(&MainScreen::networkThread, MainScreen::InitializeNetwork, NULL, NULL, 0, 80);
+
+	//TODO: Remember the values entered last time (from file on SD)
+	addressTextbox->SetText("192.168.0.1");
+	addressTextbox->hasFocus = true;
+	portTextbox->SetText("5900");
+	
+	FILE *file = openFile("r");
+	if(file != NULL) {
+		char address[1024];
+		char port[64];
+		if(fscanf(file, "%[^\n]\n%[^\n]", &address[0], &port[0]) == 2) {
+			addressTextbox->SetText(address);
+			portTextbox->SetText(port);
+		}
+		fclose(file);
+	}
+
+	mainKeyboard->Show();
+	mainKeyboard->SetListener(addressTextbox);
+}
+
+MainScreen::~MainScreen() {
+	LWP_JoinThread(networkThread, NULL);
+	delete titleText;
+	delete initializingText;
+	delete noNetworkText;
+	delete throbberTexture;
+	delete addressTextbox;
+	delete portTextbox;
+	delete mainKeyboard;
+	delete exitButton;
+	delete connectButton;
+}
 
 /**
  * Network initialization
@@ -43,65 +113,12 @@ void* MainScreen::InitializeNetwork(void*)
 	return 0;
 }
 
-
-GX_Texture *titleText;
-Textbox *addressTextbox;
-Textbox *portTextbox;
-Keyboard *mainKeyboard;
-Button *exitButton;
-Button *connectButton;
-GX_Texture *throbberTexture;
-GX_Texture *initializingText;
-GX_Texture *noNetworkText;
-int turn = 1;
-
-MainScreen::MainScreen() {
-	viewer = NULL;
-	
-	//Start initializing the network
-	if(networkStatus == NO_NETWORK) {
-		LWP_CreateThread(&MainScreen::networkThread, MainScreen::InitializeNetwork, NULL, NULL, 0, 80);
-	}
-	
-	//Text
-	titleText = GX_Text("WiiVNC", 80, 0xFFFFFF);
-	initializingText = GX_Text("Initializing network", 20, 0xFFFFFF);
-	noNetworkText = GX_Text("Could not connect to network", 18, 0xFFFFFF);
-	
-	
-	//Textboxes
-	addressTextbox = new Textbox((int)(SCREEN_WIDTH*0.05), 150, (int)(SCREEN_WIDTH*0.6), 40);
-	portTextbox = new Textbox((int)(SCREEN_WIDTH*0.7), 150, (int)(SCREEN_WIDTH*0.15), 40);
-	addressTextbox->SetText("192.168.0.128");
-	addressTextbox->hasFocus = true;
-	portTextbox->SetText("5900");
-
-	//Keyboard
-	mainKeyboard = new Keyboard(50, 220, ALPHA_NUMERIC);
-	mainKeyboard->Show();
-	mainKeyboard->SetListener(addressTextbox);
-	
-	//Buttons
-	exitButton = new Button(SCREEN_XCENTER - BUTTON_WIDTH - 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, "Exit");
-	connectButton = new Button(SCREEN_XCENTER + 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, "Connect");
-	
-	//Connecting
-	throbberTexture = GX_Texture::LoadFromPNG(throbber);	
-}
-
-MainScreen::~MainScreen() {
-	LWP_JoinThread(networkThread, NULL);
-	delete titleText;
-	delete addressTextbox;
-	delete mainKeyboard;
-	delete exitButton;
-	delete connectButton;
-}
 void MainScreen::Draw() {
 	titleText->Draw(SCREEN_XCENTER - titleText->width/2, 30);
 	addressTextbox->Draw();
 	portTextbox->Draw();
 	mainKeyboard->Draw();
+	
 	exitButton->Draw();
 	
 	//Draw networkstatus or connect button
@@ -109,7 +126,7 @@ void MainScreen::Draw() {
 		connectButton->Draw();
 	
 	if(networkStatus == NETWORK_CONNECTING) {
-		throbberTexture->Draw(SCREEN_XCENTER + 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_HEIGHT, BUTTON_HEIGHT, 255, turn);
+		throbberTexture->Draw(SCREEN_XCENTER + 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_HEIGHT, BUTTON_HEIGHT, 255, throbberRotation);
 		initializingText->Draw(SCREEN_XCENTER + BUTTON_HEIGHT + 30, SCREEN_HEIGHT - BUTTON_HEIGHT - 30);
 	}
 	
@@ -122,8 +139,6 @@ void MainScreen::OnHome()
 	FadeToExit();
 }
 
-#define THROBBER_SIZE 60
-bool connecting = false;
 
 void MainScreen::Update() {
 	addressTextbox->Update();
@@ -134,33 +149,25 @@ void MainScreen::Update() {
 	if(networkStatus == NETWORK_CONNECTED)
 	   connectButton->Update();
 	
-	turn += 4;
+	throbberRotation += 4;
 	
 	if(exitButton->clicked)
 		FadeToExit();
-	
-	if(connectButton->clicked && !connecting)
+
+	//Make the viewer and go the the connecting screen
+	if(connectButton->clicked && !Fading())
 	{
-		connecting = TRUE;
-		viewer = new Viewer(addressTextbox->GetText(), atoi(portTextbox->GetText()));
+		//Save for the next time!
+		FILE *file = openFile("w");
+		if(file != NULL)
+		{
+			fprintf(file, "%s\n%s", addressTextbox->GetText(), portTextbox->GetText());
+			fclose(file);
+		}
+		
+		Viewer *viewer = new Viewer(addressTextbox->GetText(), atoi(portTextbox->GetText()));//, strdup("wac"));
 		FadeToScreen(new ConnectingScreen(viewer));
 	}
-	/*
-	if(viewer != NULL) {
-		viewer->Update();
-		
-		if(viewer->GetStatus() == VNC_DISCONNECTED) {
-			delete viewer;
-			exit(0);
-		}
-	} else {
-		if(networkStatus == NETWORK_CONNECTED && viewer == NULL) {
-			viewer = new Viewer("192.168.0.128", 5900);
-			
-		}
-	}
-	FadeToScreen(new ConnectingScreen(NULL));
-	*/
 }
 
 void MainScreen::OnButton(bool isDown)
@@ -180,29 +187,100 @@ Screen::~Screen()
 }
 
 /*==============*\
+ ConnectingScreen
+\*==============*/
+ConnectingScreen::ConnectingScreen(Viewer *viewer) :
+	connectingText(GX_Text(TEXT_ConnectingTo, 20, 0xFFFFFF)),
+	addressText(GX_Text(viewer->GetHost(), 40, 0xFFFFFF)),
+	throbberTexture(GX_Texture::LoadFromPNG(throbber)),
+	cancelButton(new Button(SCREEN_XCENTER - BUTTON_WIDTH - 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, TEXT_Exit)),
+	connectionFailedText(GX_Text(TEXT_ConnectionFailed, 30, 0xFFFFFF)),
+	failedCounter(0),
+	viewer(viewer),
+	throbberRotation(0)
+{
+	return;
+}
+
+ConnectingScreen::~ConnectingScreen()
+{
+	delete connectingText;
+	delete addressText;
+	delete throbberTexture;
+	delete cancelButton;
+	delete connectionFailedText;
+}
+
+void ConnectingScreen::Update()
+{
+	//Find out if we can advance to a next screen
+	if(!Fading()) {
+		if(viewer->GetStatus() == VNC_NEEDPASSWORD)
+			FadeToScreen(new PasswordScreen(viewer));
+		
+		if(viewer->GetStatus() == VNC_CONNECTED)
+			FadeToScreen(viewer);
+		
+		if(viewer->GetStatus() == VNC_DISCONNECTED && failedCounter == 0)
+			failedCounter = 1;
+	}
+	
+	if(failedCounter > 0) {
+		failedCounter++;
+		
+		if(failedCounter > 100 && !Fading()) {
+			delete viewer;
+			FadeToScreen(new MainScreen());
+		}
+	}
+	
+	cancelButton->Update();
+	throbberRotation += 4;
+	
+	if(cancelButton->clicked && !Fading())
+		FadeToRestart();
+}
+
+void ConnectingScreen::Draw()
+{
+	if(failedCounter > 0) {
+		connectionFailedText->Draw(SCREEN_XCENTER - connectionFailedText->width/2, 200);
+	} else {
+		connectingText->Draw(SCREEN_XCENTER - connectingText->width/2, SCREEN_YCENTER - THROBBER_SIZE - connectingText->height - 40);
+		addressText->Draw(SCREEN_XCENTER - addressText->width/2, SCREEN_YCENTER - THROBBER_SIZE - connectingText->height);
+		throbberTexture->Draw(SCREEN_XCENTER - THROBBER_SIZE/2 ,SCREEN_YCENTER - THROBBER_SIZE/2, THROBBER_SIZE, THROBBER_SIZE, 255, throbberRotation);
+		cancelButton->Draw();
+	}	
+}
+
+void ConnectingScreen::OnHome()
+{
+	FadeToRestart();
+}
+
+void ConnectingScreen::OnButton(bool isDown)
+{
+	cancelButton->OnButton(isDown);
+}
+
+
+/*==============*\
   PasswordScreen
 \*==============*/
-Keyboard *passwordKeyboard = NULL;
-GX_Texture *enterPasswordTexture = NULL;
-Textbox *textbox;
-Button *enterButton;
-Button *pCancelButton;
-Viewer *pViewer;
-
-PasswordScreen::PasswordScreen(Viewer *viewer)
+PasswordScreen::PasswordScreen(Viewer *viewer) :
+	enterPasswordTexture(GX_Text(TEXT_EnterPassword, 70, 0xFFFFFF)),
+	textbox(new Textbox(SCREEN_XCENTER - TEXTBOX_WIDTH/2, 130, TEXTBOX_WIDTH, 50)),
+	keyboard(new Keyboard(30, 200, TEXT)),
+	cancelButton(new Button(SCREEN_XCENTER - BUTTON_WIDTH - 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, TEXT_Cancel)),
+	enterButton(new Button(SCREEN_XCENTER + 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, TEXT_Enter)),
+	viewer(viewer)
 {
-	pViewer = viewer;
-	enterPasswordTexture = GX_Text("Enter Password:", 70, 0xFFFFFF);
-	
-	textbox = new Textbox(SCREEN_XCENTER - TEXTBOX_WIDTH/2, 130, TEXTBOX_WIDTH, 50);
 	textbox->hasFocus = true;
+	textbox->SetText("");
+
+	keyboard->SetListener(textbox);
+	keyboard->Show();
 	
-	passwordKeyboard = new Keyboard(30, 200, TEXT);
-	passwordKeyboard->SetListener(textbox);
-	passwordKeyboard->Show();
-	
-	pCancelButton = new Button(SCREEN_XCENTER - BUTTON_WIDTH - 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, "Cancel");
-	enterButton = new Button(SCREEN_XCENTER + 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, "Connect");
 }
 
 PasswordScreen::~PasswordScreen()
@@ -210,27 +288,27 @@ PasswordScreen::~PasswordScreen()
 	delete enterPasswordTexture;
 	
 	delete textbox;
-	delete passwordKeyboard;
+	delete keyboard;
 
-	delete pCancelButton;
+	delete cancelButton;
 	delete enterButton;
 }
 
 void PasswordScreen::Update()
 {
 	textbox->Update();
-	passwordKeyboard->Update();
+	keyboard->Update();
 	
-	pCancelButton->Update();
+	cancelButton->Update();
 	enterButton->Update();
 	
-	if(pCancelButton->clicked && !Fading())
+	if(cancelButton->clicked && !Fading())
 		this->OnHome();
 	
 	if(enterButton->clicked && !Fading())
 	{
-		pViewer->password = strdup(textbox->GetText());
-		FadeToScreen(new ConnectingScreen(pViewer));
+		viewer->password = strdup(textbox->GetText());
+		FadeToScreen(new ConnectingScreen(viewer));
 	}
 }
 
@@ -238,9 +316,9 @@ void PasswordScreen::Draw()
 {
 	enterPasswordTexture->Draw(SCREEN_XCENTER - enterPasswordTexture->width/2, 20);
 	textbox->Draw();
-	passwordKeyboard->Draw();
+	keyboard->Draw();
 	
-	pCancelButton->Draw();
+	cancelButton->Draw();
 	enterButton->Draw();
 	
 }
@@ -248,81 +326,12 @@ void PasswordScreen::Draw()
 void PasswordScreen::OnButton(bool isDown)
 {
 	textbox->OnButton(isDown);
-	pCancelButton->OnButton(isDown);
+	cancelButton->OnButton(isDown);
 	enterButton->OnButton(isDown);
-	
 }
 
 void PasswordScreen::OnHome()
 {
-	delete pViewer;
+	delete viewer;
 	FadeToScreen(new MainScreen());
-}
-
-/*==============*\
- ConnectingScreen
-\*==============*/
-bool fadingToViewer = false;
-GX_Texture *connectingText;
-GX_Texture *addressText;
-Button *cancelButton;
-int counter;
-
-ConnectingScreen::ConnectingScreen(Viewer *viewer) :
-	viewer(viewer)
-{
-	counter = 0;
-	connectingText = GX_Text("Connecting to:", 20, 0xFFFFFF);
-	addressText = GX_Text(viewer->client->serverHost, 40, 0xFFFFFF);
-	throbberTexture = GX_Texture::LoadFromPNG(throbber);
-	
-	cancelButton = new Button(SCREEN_XCENTER - BUTTON_WIDTH - 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, "Cancel");
-}
-
-void ConnectingScreen::Update()
-{
-	counter++;
-	
-	if(counter > 100 && !Fading()) {
-		if(viewer->GetStatus() == VNC_NEEDPASSWORD)
-			FadeToScreen(new PasswordScreen(viewer));
-		
-		if(viewer->GetStatus() == VNC_CONNECTED) {
-			FadeToScreen(viewer);
-		}
-		
-		if(viewer->GetStatus() == VNC_DISCONNECTED) {
-			delete viewer;
-			FadeToScreen(new MainScreen());
-		}
-	}
-	
-	cancelButton->Update();
-	turn += 4;
-	
-	if(cancelButton->clicked)
-		FadeToExit();
-	
-	if(fadingToViewer)
-		return;
-}
-
-
-
-void ConnectingScreen::Draw()
-{
-	connectingText->Draw(SCREEN_XCENTER - connectingText->width/2, SCREEN_YCENTER - THROBBER_SIZE - connectingText->height - 40);
-	addressText->Draw(SCREEN_XCENTER - addressText->width/2, SCREEN_YCENTER - THROBBER_SIZE - connectingText->height);
-	throbberTexture->Draw(SCREEN_XCENTER - THROBBER_SIZE/2 ,SCREEN_YCENTER - THROBBER_SIZE/2, THROBBER_SIZE, THROBBER_SIZE, 255, turn);
-	cancelButton->Draw();
-}
-
-void ConnectingScreen::OnHome()
-{
-	FadeToScreen(new PasswordScreen(NULL));
-}
-
-void ConnectingScreen::OnButton(bool isDown)
-{
-	cancelButton->OnButton(isDown);
 }

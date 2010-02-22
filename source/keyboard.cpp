@@ -1,5 +1,6 @@
 #include "keyboard.h"
 #include "common.h"
+#include "language.h"
 
 //A character / uppercase character pair
 struct ch_key {
@@ -298,7 +299,7 @@ void CommandKey::Draw()
 	Key::Draw();
 	
 	text_texture->Draw(keyboard->position_x + x + 5 - grow, keyboard->position_y + y - grow,
-						   text_texture->width + grow*2, text_texture->height + grow*2, keyboard->opacity);
+						   MIN(text_texture->width, width-8) + grow*2, text_texture->height + grow*2, keyboard->opacity);
 }
 
 u32 CommandKey::GetBaseColor()
@@ -423,15 +424,15 @@ Keyboard::Keyboard(int position_x, int position_y, KeyboardType type) :
 	
 		//Command Keys (right side)
 		Keys[b++] = new CommandKey(this, 410, 128, 40, "ESC", KS_Escape);
-		Keys[b++] = new CommandKey(this, 500, 96, 40, "Up", KS_Up);
-		Keys[b++] = new CommandKey(this, 500, 128, 40, "Down", KS_Down);
+		Keys[b++] = new CommandKey(this, 500, 96, 40, TEXT_Up, KS_Up);
+		Keys[b++] = new CommandKey(this, 500, 128, 40, TEXT_Down, KS_Down);
 		Keys[b++] = new CommandKey(this, 510, 64, 70, "Return", KS_Return);
 	}
 	
 	Keys[b++] = new CommandKey(this, type == ALPHA_NUMERIC ? 440 : 520, 0, 60, "Backspace", KS_BackSpace);
 	Keys[b++] = new CommandKey(this, 370, 128, 40, "Del", KS_Delete);
-	Keys[b++] = new CommandKey(this, type == FULL ? 460 : 90, 128, 40, "Left", KS_Left);
-	Keys[b++] = new CommandKey(this, type == FULL ? 540 : 130, 128, 40, "Right", KS_Right);
+	Keys[b++] = new CommandKey(this, type == FULL ? 460 : 90, 128, 40, TEXT_Left, KS_Left);
+	Keys[b++] = new CommandKey(this, type == FULL ? 540 : 130, 128, 40, TEXT_Right, KS_Right);
 }
 
 Keyboard::~Keyboard() {

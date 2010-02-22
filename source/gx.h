@@ -9,8 +9,8 @@
 #include <malloc.h>
 #include <ogcsys.h>
 
-#define SCREEN_WIDTH 640
-#define SCREEN_HEIGHT 480
+extern int SCREEN_WIDTH;
+extern int SCREEN_HEIGHT;
 
 #define SCREEN_XCENTER SCREEN_WIDTH / 2
 #define SCREEN_YCENTER SCREEN_HEIGHT / 2

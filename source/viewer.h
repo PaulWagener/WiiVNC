@@ -35,6 +35,7 @@ public:
 	void Draw();
 	void Update();
 	ViewerStatus GetStatus();
+	const char* GetHost();
 	
 	void OnButton(bool isDown);
 	void OnMiddleButton(bool isDown);
@@ -76,7 +77,7 @@ private:
 	#define SCREENPART_WIDTH 640 
 	#define SCREENPART_HEIGHT 480
 	
-	int height, width;
+	int width, height;
 	
 	//Zoom status
 	bool zooming_in;
@@ -93,13 +94,11 @@ private:
 	
 	Keyboard *keyboard;	
 	
-	//The posiion of the cursor & the mouse buttons that are pressed
-	int cursor_x, cursor_y,
-		cursor_state;
+	//The mouse buttons that are pressed
+	int cursor_state;
 
 	//The VNC connection to the server
 	//Thanks libvncclient© for making my life this easy! 
-public:
 	rfbClient *client;
 	
 	lwp_t backgroundthread_handle;

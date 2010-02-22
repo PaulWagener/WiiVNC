@@ -2,9 +2,7 @@
 #define ScreenH
 
 #include "controller.h"
-/**
- * A screen is a screen-filling 
- */
+
 class Screen : public ControllerListener {
 public:
 
@@ -13,10 +11,9 @@ public:
 	virtual void Draw()=0;
 };
 
-//static Screen *currentScreen = NULL;
-
 void FadeToScreen(Screen *screen);
 void FadeToExit();
+void FadeToRestart();
 bool Fading();
 
 #endif

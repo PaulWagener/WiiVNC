@@ -67,8 +67,8 @@ void Controller::Update()
 				u8 up = usb_oldbutton & ~event.button;
 				u8 down = event.button & (event.button ^ usb_oldbutton);
 				
-				if(down & USB_LEFTBUTTON) listener->OnButton(true);
-				if(up & USB_LEFTBUTTON) listener->OnButton(false);
+				if(down & USB_LEFTBUTTON) focus_listener->OnButton(true);
+				if(up & USB_LEFTBUTTON) focus_listener->OnButton(false);
 				if(down & USB_MIDDLEBUTTON) listener->OnMiddleButton(true);
 				if(up & USB_MIDDLEBUTTON) listener->OnMiddleButton(false);
 				if(down & USB_RIGHTBUTTON) listener->OnSecondaryButton(true);
@@ -100,10 +100,11 @@ void Controller::Update()
 			if(wpad_down & WPAD_BUTTON_A) focus_listener->OnButton(true);
 			if(wpad_up & WPAD_BUTTON_A) focus_listener->OnButton(false);
 		}
+		
+		//Extra event for keyboard, which should always know if a button gets depressed
+		if(keyboard != NULL && wpad_up & WPAD_BUTTON_A) keyboard->OnButton(false);
 			
-		if(listener != NULL) {
-			if(keyboard != NULL && wpad_up & WPAD_BUTTON_A) keyboard->OnButton(false);
-			
+		if(listener != NULL) {			
 			if(wpad_down & WPAD_BUTTON_B) listener->OnSecondaryButton(true);
 			if(wpad_up & WPAD_BUTTON_B) listener->OnSecondaryButton(false);
 			

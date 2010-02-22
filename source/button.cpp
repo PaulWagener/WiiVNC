@@ -28,7 +28,7 @@ grow(0),
 clickfade(0),
 clicked(false)
 {
-	textTexture = GX_Text(text, even(height/1.5f), 0x000000);
+	textTexture = GX_Text(text, even(height/2.0f), 0x000000);
 	backgroundTexture = GX_Texture::LoadFromPNG(wiibutton);
 }
 
@@ -36,7 +36,7 @@ void Button::Draw()
 {
 	u32 color = colortween(0xFFFFFF, 0x2f8c97, clickfade/255.0f);
 	backgroundTexture->Draw(x-grow, y-grow, width+grow*2, height+grow*2, 255, 0, color);
-	textTexture->Draw(x + width/2 - textTexture->width/2 - grow, y-grow, textTexture->width + grow*2, textTexture->height + grow*2);
+	textTexture->Draw(x + width/2 - textTexture->width/2 - grow, y-grow + 5, textTexture->width + grow*2, textTexture->height + grow*2);
 }
 
 bool Button::IsMouseOver(int x, int y)

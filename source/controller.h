@@ -8,8 +8,8 @@
 class Keyboard;
 
 /**
- * The ControllerListener is the interface classes have to implement
- * in order to recieve callbacks from the user
+ * The ControllerListener is what classes have to subclass
+ * in order to recieve callbacks from the Controller class
  */
 class ControllerListener {
 public:
@@ -28,7 +28,12 @@ public:
 
 /**
  * The controller retrieves all buttonpresses from the user and
- * handles all cursor events
+ * handles all cursor events.
+ * All input events are then delegated to the current 'ControllerListener', this is
+ * is something that can use the controller events in a meaningfull way.
+ *
+ * If a keyboard is present on the screen than all cursor movement/click events are consumed by the keyboard if
+ * the cursor is above the keyboard
  */
 class Controller {
 public:	
@@ -36,15 +41,18 @@ public:
 	void Draw();
 	void SetListener(ControllerListener *listener);
 	void SetKeyboard(Keyboard *keyboard);
+	
+	//Getters for current cursor position
 	static int GetX();
 	static int GetY();
+	
 	static Controller* instance();
 
 private:
-	//Current cursor location
+	//Current cursor position
 	int x, y;
 	
-	//Previous cursor location
+	//Previous cursor position
 	int previous_x, previous_y;
 	
 	//Current object that gets controller updates

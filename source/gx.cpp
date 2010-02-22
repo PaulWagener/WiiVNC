@@ -3,6 +3,10 @@
 void *xfb[2];
 int fb = 0;
 GXRModeObj *rmode;
+
+int SCREEN_WIDTH;
+int SCREEN_HEIGHT;
+
 int GX_Initialize()
 {
 	Mtx GXmodelView2D;
@@ -98,7 +102,14 @@ int GX_Initialize()
     guMtxTransApply(GXmodelView2D, GXmodelView2D, 0.0F, 0.0F, -100.0F);
     GX_LoadPosMtxImm(GXmodelView2D, GX_PNMTX0);
 
-    guOrtho(perspective, 0, rmode->efbHeight, 0, rmode->fbWidth, 0, 1000.0f);
+	if(CONF_GetAspectRatio()) {
+		SCREEN_WIDTH = 719;
+		SCREEN_HEIGHT = 479;		
+	} else {
+		SCREEN_WIDTH = 639;
+		SCREEN_HEIGHT = 479;		
+	}
+    guOrtho(perspective, 0, SCREEN_HEIGHT, 0, SCREEN_WIDTH, 0, 1000.0f);
     GX_LoadProjectionMtx(perspective, GX_ORTHOGRAPHIC);
 
     GX_SetViewport(0, 0, rmode->fbWidth, rmode->efbHeight, 0, 1);
