@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<app version="1">
+  <name>WiiVNC</name>
+  <coder>PaulWagener</coder>
+  <version>1.0</version>
+  <short_description>Control your computer</short_description> 
+  <long_description>Connect to a VNC server
+   
+   Controls:
+   A - Left click
+   B - Right click
+   plus minus - Zoom
+   D-pad - Move screen
+   2 - Keyboard
+   Home - Go back to Homebrew Channel</long_description> 
+</app>

@@ -1,0 +1,6 @@
+#!/bin/sh
+rm WiiVNC.zip
+cp WiiVNC.dol WiiVNC/boot.dol
+rm WiiVNC/.DS_Store
+zip -r WiiVNC.zip WiiVNC
+rm WiiVNC/boot.dol
