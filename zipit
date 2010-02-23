@@ -2,5 +2,7 @@
 rm WiiVNC.zip
 cp WiiVNC.dol WiiVNC/boot.dol
 rm WiiVNC/.DS_Store
-zip -r WiiVNC.zip WiiVNC
+mv WiiVNC/.svn temp.svn
+zip -r -9 WiiVNC.zip WiiVNC
+mv temp.svn WiiVNC/.svn
 rm WiiVNC/boot.dol

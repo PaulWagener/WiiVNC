@@ -51,6 +51,22 @@ void InitializeLanguage()
 			TEXT_Right = "Rechts";
 			break;
 			
+		case CONF_LANG_GERMAN:
+			TEXT_InitializingNetwork = "Netzwerk initialisieren";
+			TEXT_CouldNotConnect = "Konnte keine verbindung machen zum netzwerk";
+			TEXT_ConnectingTo = "Verbindung machen mit:";
+			TEXT_ConnectionFailed = "Verbindung fehler";
+			TEXT_EnterPassword = "Passwort eingeben:";
+			TEXT_Cancel = "Abbrechen";
+			TEXT_Connect = "Verbindung";
+			TEXT_Exit = "Beënden";
+			TEXT_Enter = "OK";
+			TEXT_Up = "Oben";
+			TEXT_Down = "Rünter";
+			TEXT_Left = "Links";
+			TEXT_Right = "Rechts";
+			break;
+			
 		//TODO:
 		//	CONF_LANG_JAPANESE,
 		//	CONF_LANG_GERMAN,
