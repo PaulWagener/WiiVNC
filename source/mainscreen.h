@@ -8,11 +8,14 @@
 
 #include "common.h"
 #include "button.h"
+#include "checkbox.h"
 #include "gfx/throbber.h"
 enum network_status {NO_NETWORK, NETWORK_CONNECTING, NETWORK_CONNECTED};
 
 #define TEXTBOX_WIDTH 600
 #define THROBBER_SIZE 60
+#define BUTTON_WIDTH 200
+#define BUTTON_HEIGHT 40
 
 /**
  * The mainscreen is where the user fills in the IP address and the port of the VNC server
@@ -20,7 +23,7 @@ enum network_status {NO_NETWORK, NETWORK_CONNECTING, NETWORK_CONNECTED};
  */
 class MainScreen : public Screen {
 private:
-	GX_Texture *titleText;
+	GX_Texture *logo;
 	GX_Texture *initializingText;
 	GX_Texture *noNetworkText;
 	GX_Texture *throbberTexture;
@@ -84,6 +87,7 @@ class PasswordScreen : public Screen {
 private:
 	GX_Texture *enterPasswordTexture;
 	Textbox *textbox;
+	Checkbox *hideCheckbox;
 	Keyboard *keyboard;
 	Button *cancelButton;
 	Button *enterButton;

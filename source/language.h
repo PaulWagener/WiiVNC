@@ -1,19 +1,19 @@
 #ifndef LanguageH
 #define LanguageH
 
-extern const char* TEXT_InitializingNetwork;
-extern const char* TEXT_CouldNotConnect;
-extern const char* TEXT_ConnectingTo;
-extern const char* TEXT_ConnectionFailed;
-extern const char* TEXT_EnterPassword;
-extern const char* TEXT_Cancel;
-extern const char* TEXT_Connect;
-extern const char* TEXT_Exit;
-extern const char* TEXT_Enter;
-extern const char* TEXT_Left;
-extern const char* TEXT_Right;
-extern const char* TEXT_Up;
-extern const char* TEXT_Down;
+extern const wchar_t* TEXT_InitializingNetwork;
+extern const wchar_t* TEXT_CouldNotConnect;
+extern const wchar_t* TEXT_ConnectingTo;
+extern const wchar_t* TEXT_ConnectionFailed;
+extern const wchar_t* TEXT_EnterPassword;
+extern const wchar_t* TEXT_Cancel;
+extern const wchar_t* TEXT_Connect;
+extern const wchar_t* TEXT_Exit;
+extern const wchar_t* TEXT_Enter;
+extern const wchar_t* TEXT_Left;
+extern const wchar_t* TEXT_Right;
+extern const wchar_t* TEXT_Up;
+extern const wchar_t* TEXT_Down;
 
 void InitializeLanguage();
 

@@ -2,7 +2,7 @@
 <app version="1">
   <name>WiiVNC</name>
   <coder>PaulWagener</coder>
-  <version>1.0</version>
+  <version>1.1</version>
   <short_description>Control your computer</short_description> 
   <long_description>Connect to a VNC server
    

@@ -15,7 +15,8 @@ Textbox::Textbox(int x, int y, int width, int height) :
 	dragging(false),
 	dragStart(0),
 	positions((u16*)malloc(sizeof(u16))),
-	hasFocus(false)
+	hasFocus(false),
+	hidden(false)
 {
 	text[0] = '\0';
 }
@@ -80,8 +81,7 @@ void Textbox::SetText(const char* text)
 	delete this->text;
 	this->text = strdup(text);
 	
-	delete textTexture;
-	textTexture = GX_Text(text, height/2 - (height/2)%2, 0);
+	SetTextTexture();
 	
 	cursorPosition = selStart = selEnd = 0;
 	RecalculatePositions();
@@ -90,6 +90,13 @@ void Textbox::SetText(const char* text)
 const char* Textbox::GetText()
 {
 	return this->text;
+}
+
+void Textbox::SetHidden(bool hidden)
+{
+	this->hidden = hidden;
+	SetTextTexture();
+	RecalculatePositions();
 }
 
 void Textbox::DeleteSelection()
@@ -105,9 +112,7 @@ void Textbox::DeleteSelection()
 	
 	realloc(text, strlen(text)+1);
 	
-	//Replace textTexture
-	delete textTexture;
-	textTexture = GX_Text(text, height/2 - (height/2)%2, 0);
+	SetTextTexture();
 	
 	cursorPosition = selStart;
 	selEnd = selStart;
@@ -179,13 +184,24 @@ void Textbox::OnKey(int keycode, bool isDown) {
 		text[cursorPosition] = keycode;
 		cursorPosition++;
 		
-		//Replace the text texture cache
-		delete textTexture;
-		textTexture = GX_Text(text, height/2 - (height/2)%2, 0);
-		
+		SetTextTexture();		
 		RecalculatePositions();
 	}
 	cursorCount = 0;
+}
+
+void Textbox::SetTextTexture()
+{
+	delete textTexture;
+	
+	char* textCopy = strdup(text);
+	if(hidden) {
+		for(int i = 0; i < (int)strlen(textCopy); i++)
+			textCopy[i] = '*';
+	}
+	
+	textTexture = GX_Text(textCopy, height/2 - (height/2)%2, 0);
+	delete textCopy;
 }
 
 bool Textbox::IsMouseOver(int x, int y)
@@ -244,16 +260,22 @@ void Textbox::RecalculatePositions()
 	positions = (u16*)realloc(positions, (num_chars+1) * sizeof(positions[0]));
 	
 	positions[0] = 0;
+	char* textCopy = strdup(text);
+	if(hidden) {
+		for(int i = 0; i < (int)strlen(textCopy); i++)
+			textCopy[i] = '*';
+	}
 	
 	for(int i = 1; i < num_chars+1; i++)
 	{
-		char temp = text[i];
-		text[i] = '\0';
-		GX_Texture *tempText = GX_Text(text, height/2 - (height/2)%2, 0);
+		char temp = textCopy[i];
+		textCopy[i] = '\0';
+		GX_Texture *tempText = GX_Text(textCopy, height/2 - (height/2)%2, 0);
 		positions[i] = tempText->width;
 		delete tempText;
-		text[i] = temp;
+		textCopy[i] = temp;
 	}
+	delete textCopy;
 }
 
 int Textbox::GetTextX()

@@ -103,7 +103,7 @@ int GX_Initialize()
     GX_LoadPosMtxImm(GXmodelView2D, GX_PNMTX0);
 
 	if(CONF_GetAspectRatio()) {
-		SCREEN_WIDTH = 719;
+		SCREEN_WIDTH = 745;
 		SCREEN_HEIGHT = 479;		
 	} else {
 		SCREEN_WIDTH = 639;

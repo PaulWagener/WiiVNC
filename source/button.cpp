@@ -19,17 +19,23 @@ int even(int x)
 	return x - x % 2;
 }
 
-Button::Button(int x, int y, int width, int height, const char* text) :
-x(x),
-y(y),
-width(width),
-height(height),
-grow(0),
-clickfade(0),
-clicked(false)
+Button::Button(int x, int y, int width, int height, const wchar_t* text) :
+	x(x),
+	y(y),
+	width(width),
+	height(height),
+	grow(0),
+	clickfade(0),
+	clicked(false)
 {
 	textTexture = GX_Text(text, even(height/2.0f), 0x000000);
 	backgroundTexture = GX_Texture::LoadFromPNG(wiibutton);
+}
+
+Button::~Button()
+{
+	delete textTexture;
+	delete backgroundTexture;
 }
 
 void Button::Draw()

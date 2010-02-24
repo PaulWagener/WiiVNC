@@ -68,7 +68,7 @@ Viewer::Viewer(const char* ip, int port, const char* password) :
 	height(0),
 	zooming_in(false),
 	zooming_out(false),
-	keyboard(new Keyboard(30, 300, FULL)),
+	keyboard(new Keyboard(300, FULL)),
 	cursor_state(0)
 {
 	if (instance != NULL)

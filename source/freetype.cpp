@@ -8,15 +8,26 @@ static FT_Library ftLibrary;
 static FT_Face ftFace;
 
 /* Static function prototypes */
-static unsigned int DrawText(const char *string, unsigned int fontSize, void *buffer);
+static unsigned int DrawText(const wchar_t *string, unsigned int fontSize, void *buffer);
 static bool BlitGlyph(FT_Bitmap *bitmap, int offset, int top, void *buffer);
 static void BitmapTo4x4RGBA(const unsigned char *src, void *dst, const unsigned int src_width, const unsigned int src_height, const unsigned int dst_width, const unsigned int dst_height);
 extern void* GRRLIB_TextToTexture(const char *string, unsigned int fontSize, unsigned int fontColour);
 
+GX_Texture* GX_Text(const char *string, uint fontSize, uint color) {
+	size_t length = strlen(string);
+	wchar_t *utf32 = (wchar_t*)malloc((length+1) * sizeof(wchar_t));
+	mbstowcs(utf32, string, length);
+	utf32[length] = 0;
+
+	GX_Texture *ret = GX_Text(utf32, fontSize, color);
+	free (utf32);
+	return ret;
+}
+
 /**
  * Shameless wrapper around the handy FreeTypeGRRLIB
  */
-GX_Texture* GX_Text(const char *string, uint fontSize, uint color)
+GX_Texture* GX_Text(const wchar_t *string, uint fontSize, uint color)
 {
 	unsigned int error = FT_Set_Pixel_Sizes(ftFace, 0, fontSize);
 	if (error) {
@@ -80,8 +91,9 @@ extern void GX_InitFreetype(void) {
 	}
 }
 
+#include <wchar.h>
 
-static unsigned int DrawText(const char *string, unsigned int fontSize, void *buffer) {
+static unsigned int DrawText(const wchar_t *string, unsigned int fontSize, void *buffer) {
 	unsigned int error = 0;
 	int penX = 0;
 	int penY = fontSize;
@@ -91,9 +103,9 @@ static unsigned int DrawText(const char *string, unsigned int fontSize, void *bu
 	FT_Bool hasKerning = FT_HAS_KERNING(ftFace);
 	
 	/* Convert the string to UTF32 */
-	size_t length = strlen(string);
-	wchar_t *utf32 = (wchar_t*)malloc(length * sizeof(wchar_t)); 
-	length = mbstowcs(utf32, string, length);
+	//size_t length = strlen(string);
+	const wchar_t *utf32 =  string;//(wchar_t*)malloc(length * sizeof(wchar_t)); 
+	size_t length = wcslen(utf32);//mbstowcs(utf32, string, length);
 	
 	/* Loop over each character, drawing it on to the buffer, until the 
 	 * end of the string is reached, or until the pixel width is too wide */
@@ -124,12 +136,12 @@ static unsigned int DrawText(const char *string, unsigned int fontSize, void *bu
 			previousGlyph = glyphIndex;
 		} else {
 			/* BlitGlyph returned false, the line must be full */
-			free(utf32);
+			//free(utf32);
 			return penX;
 		}
 	}
 	
-	free(utf32);
+	//free(utf32);
 	return penX;
 }
 

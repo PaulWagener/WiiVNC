@@ -12,6 +12,7 @@
 
 #include "gx.h"
 
+GX_Texture* GX_Text(const wchar_t *string, uint fontSize=20, uint color=0xFFFFFFFF);
 GX_Texture* GX_Text(const char *string, uint fontSize=20, uint color=0xFFFFFFFF);
 extern void GX_InitFreetype(void);
 #endif

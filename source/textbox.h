@@ -48,10 +48,13 @@ public:
 	void OnKey(int keycode, bool isDown);
 	void OnButton(bool isDown);
 	void SetText(const char* text);
+	void SetTextTexture();
 	const char* GetText();
+	void SetHidden(bool hidden);
 	bool IsMouseOver(int x, int y);
 
 	bool hasFocus;
+	bool hidden;
 private:
 	bool IsLegalCharacter(u16 keycode);
 	int GetPosition(int x);

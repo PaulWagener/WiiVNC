@@ -5,8 +5,7 @@
 #include <sys/dir.h>
 
 #include "language.h"
-#define BUTTON_WIDTH 200
-#define BUTTON_HEIGHT 40
+#include "gfx/logo_wiivnc.h"
 
 //Static variables
 network_status MainScreen::networkStatus = NO_NETWORK;
@@ -36,14 +35,14 @@ FILE* openFile(const char* mode)
 }
 
 MainScreen::MainScreen() :
-	titleText(GX_Text("WiiVNC", 80, 0xFFFFFF)),
+	logo(GX_Texture::LoadFromPNG(logo_wiivnc)),
 	initializingText(GX_Text(TEXT_InitializingNetwork, 20, 0xFFFFFF)),
 	noNetworkText(GX_Text(TEXT_CouldNotConnect, 18, 0xFFFFFF)),
 	throbberTexture(GX_Texture::LoadFromPNG(throbber)),
 
-	addressTextbox(new Textbox((int)(SCREEN_WIDTH*0.05), 150, (int)(SCREEN_WIDTH*0.6), 40)),
-	portTextbox(new Textbox((int)(SCREEN_WIDTH*0.7), 150, (int)(SCREEN_WIDTH*0.15), 40)),
-	mainKeyboard(new Keyboard(50, 220, ALPHA_NUMERIC)),
+	addressTextbox(new Textbox((int)(SCREEN_WIDTH*0.05), 150, (int)(SCREEN_WIDTH*0.7), 40)),
+	portTextbox(new Textbox((int)(SCREEN_WIDTH*0.8), 150, (int)(SCREEN_WIDTH*0.15), 40)),
+	mainKeyboard(new Keyboard(220, ALPHA_NUMERIC)),
 
 	exitButton(new Button(SCREEN_XCENTER - BUTTON_WIDTH - 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, TEXT_Exit)),
 	connectButton(new Button(SCREEN_XCENTER + 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, TEXT_Connect)),
@@ -75,7 +74,7 @@ MainScreen::MainScreen() :
 
 MainScreen::~MainScreen() {
 	LWP_JoinThread(networkThread, NULL);
-	delete titleText;
+	delete logo;
 	delete initializingText;
 	delete noNetworkText;
 	delete throbberTexture;
@@ -114,7 +113,7 @@ void* MainScreen::InitializeNetwork(void*)
 }
 
 void MainScreen::Draw() {
-	titleText->Draw(SCREEN_XCENTER - titleText->width/2, 30);
+	logo->Draw(SCREEN_XCENTER - logo->width/2, 30);
 	addressTextbox->Draw();
 	portTextbox->Draw();
 	mainKeyboard->Draw();
@@ -269,8 +268,9 @@ void ConnectingScreen::OnButton(bool isDown)
 \*==============*/
 PasswordScreen::PasswordScreen(Viewer *viewer) :
 	enterPasswordTexture(GX_Text(TEXT_EnterPassword, 70, 0xFFFFFF)),
-	textbox(new Textbox(SCREEN_XCENTER - TEXTBOX_WIDTH/2, 130, TEXTBOX_WIDTH, 50)),
-	keyboard(new Keyboard(30, 200, TEXT)),
+	textbox(new Textbox(SCREEN_XCENTER - TEXTBOX_WIDTH/2, 130, TEXTBOX_WIDTH - 70, 50)),
+	hideCheckbox(new Checkbox(SCREEN_WIDTH - 80, 136, 40, 40)),
+	keyboard(new Keyboard(200, TEXT)),
 	cancelButton(new Button(SCREEN_XCENTER - BUTTON_WIDTH - 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, TEXT_Cancel)),
 	enterButton(new Button(SCREEN_XCENTER + 20, SCREEN_HEIGHT - BUTTON_HEIGHT - 30, BUTTON_WIDTH, BUTTON_HEIGHT, TEXT_Enter)),
 	viewer(viewer)
@@ -288,6 +288,7 @@ PasswordScreen::~PasswordScreen()
 	delete enterPasswordTexture;
 	
 	delete textbox;
+	delete hideCheckbox;
 	delete keyboard;
 
 	delete cancelButton;
@@ -298,13 +299,18 @@ void PasswordScreen::Update()
 {
 	textbox->Update();
 	keyboard->Update();
-	
 	cancelButton->Update();
 	enterButton->Update();
 	
+	//Toggle password hiding
+	if(hideCheckbox->checked != textbox->hidden)
+		textbox->SetHidden(hideCheckbox->checked);
+	
+	//Cancel
 	if(cancelButton->clicked && !Fading())
 		this->OnHome();
 	
+	//Enter
 	if(enterButton->clicked && !Fading())
 	{
 		viewer->password = strdup(textbox->GetText());
@@ -316,6 +322,7 @@ void PasswordScreen::Draw()
 {
 	enterPasswordTexture->Draw(SCREEN_XCENTER - enterPasswordTexture->width/2, 20);
 	textbox->Draw();
+	hideCheckbox->Draw();
 	keyboard->Draw();
 	
 	cancelButton->Draw();
@@ -328,6 +335,7 @@ void PasswordScreen::OnButton(bool isDown)
 	textbox->OnButton(isDown);
 	cancelButton->OnButton(isDown);
 	enterButton->OnButton(isDown);
+	hideCheckbox->OnButton(isDown);
 }
 
 void PasswordScreen::OnHome()

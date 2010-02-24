@@ -93,7 +93,7 @@ private:
 	int key_code; //Keycode this key sends
 	
 public:
-	CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code, bool sticky);
+	CommandKey(Keyboard *keyboard, int x, int y, int width, const wchar_t* text, int key_code, bool sticky);
 	~CommandKey();
 	void Draw();
 	bool HasKeyCode(u16 keycode);
@@ -241,8 +241,8 @@ void Key::Release()
 CharacterKey::CharacterKey(Keyboard *keyboard, int x, int y, struct ch_key key)
 		: Key(keyboard, x, y, keyboard->buttonTexture->width),
 	key(key),
-	lowercase_texture( GX_Text( (char[2]){key.ch, '\0'} , 20, 0) ),
-	uppercase_texture( GX_Text( (char[2]){key.ucase_ch, '\0'} , 20, 0) )
+	lowercase_texture( GX_Text( (wchar_t[2]){key.ch, '\0'} , 20, 0) ),
+	uppercase_texture( GX_Text( (wchar_t[2]){key.ucase_ch, '\0'} , 20, 0) )
 {
 }
 
@@ -281,7 +281,7 @@ bool CharacterKey::HasKeyCode(u16 keycode)
   Command Key
 \*===========*/
 
-CommandKey::CommandKey(Keyboard *keyboard, int x, int y, int width, const char* text, int key_code, bool sticky=false)
+CommandKey::CommandKey(Keyboard *keyboard, int x, int y, int width, const wchar_t* text, int key_code, bool sticky=false)
 	: Key(keyboard, x, y, width),
 	text_texture(GX_Text( text, 12, 0)),
 	key_code(key_code)
@@ -335,8 +335,7 @@ void KeyboardListener::OnKey(int keycode, bool isDown)
    Keyboard
 \*===========*/
 
-Keyboard::Keyboard(int position_x, int position_y, KeyboardType type) :
-	position_x(position_x),
+Keyboard::Keyboard(int position_y, KeyboardType type) :
 	position_y(position_y),
 	opacity(0),
 	show(false),
@@ -390,6 +389,7 @@ Keyboard::Keyboard(int position_x, int position_y, KeyboardType type) :
 	
 	const struct ch_key (&keys)[4][13] = type == ALPHA_NUMERIC? alpha_keys : full_keys;
 	
+	
 	int b = 0;
 	for(unsigned int row = 0; row < sizeof(keys) / sizeof(keys[0]); row++) {
 		int x = row_pos[row][0];
@@ -411,28 +411,39 @@ Keyboard::Keyboard(int position_x, int position_y, KeyboardType type) :
 	
 	if(type == FULL || type == TEXT)
 	{
-		Keys[b++] = shiftKey = new CommandKey(this, 0, 96, 90, "Shift", KS_Shift_L, true);
-		Keys[b++] = capslockKey = new CommandKey(this, 0, 64, 70, "CapsLock", KS_Shift_L, true);
+		Keys[b++] = shiftKey = new CommandKey(this, 0, 96, 90, L"Shift", KS_Shift_L, true);
+		Keys[b++] = capslockKey = new CommandKey(this, 0, 64, 70, L"CapsLock", KS_Shift_L, true);
 	}
 	
 	if(type == FULL) {
 		//Command Keys (left side)
-		Keys[b++] = new CommandKey(this, 0, 32, 60, "Tab", KS_Tab);
-		Keys[b++] = new CommandKey(this, 0, 128, 60, "Ctrl", KS_Control_L, true);
-		Keys[b++] = new CommandKey(this, 60, 128, 60, "Alt", KS_Alt_L, true);
-		Keys[b++] = new CommandKey(this, 120, 128, 50, "Meta", KS_Meta_L, true);
+		Keys[b++] = new CommandKey(this, 0, 32, 60, L"Tab", KS_Tab);
+		Keys[b++] = new CommandKey(this, 0, 128, 60, L"Ctrl", KS_Control_L, true);
+		Keys[b++] = new CommandKey(this, 60, 128, 60, L"Alt", KS_Alt_L, true);
+		Keys[b++] = new CommandKey(this, 120, 128, 50, L"Meta", KS_Meta_L, true);
 	
 		//Command Keys (right side)
-		Keys[b++] = new CommandKey(this, 410, 128, 40, "ESC", KS_Escape);
+		Keys[b++] = new CommandKey(this, 410, 128, 40, L"ESC", KS_Escape);
 		Keys[b++] = new CommandKey(this, 500, 96, 40, TEXT_Up, KS_Up);
 		Keys[b++] = new CommandKey(this, 500, 128, 40, TEXT_Down, KS_Down);
-		Keys[b++] = new CommandKey(this, 510, 64, 70, "Return", KS_Return);
+		Keys[b++] = new CommandKey(this, 510, 64, 70, L"Return", KS_Return);
 	}
 	
-	Keys[b++] = new CommandKey(this, type == ALPHA_NUMERIC ? 440 : 520, 0, 60, "Backspace", KS_BackSpace);
-	Keys[b++] = new CommandKey(this, 370, 128, 40, "Del", KS_Delete);
+	Keys[b++] = new CommandKey(this, type == ALPHA_NUMERIC ? 440 : 520, 0, 60, L"Backspace", KS_BackSpace);
+	Keys[b++] = new CommandKey(this, 370, 128, 40, L"Del", KS_Delete);
 	Keys[b++] = new CommandKey(this, type == FULL ? 460 : 90, 128, 40, TEXT_Left, KS_Left);
 	Keys[b++] = new CommandKey(this, type == FULL ? 540 : 130, 128, 40, TEXT_Right, KS_Right);
+	
+	//Find the width
+	int width = 0;
+	for(int i = 0; i < NUM_KEYS; i++)
+	{
+		if(Keys[i] != NULL)
+			width = MAX(Keys[i]->x + Keys[i]->width, width);
+	}
+	
+	//Always put the keyboard in the center
+	position_x = SCREEN_XCENTER - width/2;
 }
 
 Keyboard::~Keyboard() {

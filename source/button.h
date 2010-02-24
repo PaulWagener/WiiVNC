@@ -14,7 +14,8 @@ public:
 	bool clicked;
 	GX_Texture *backgroundTexture;
 	GX_Texture *textTexture;
-	Button(int x, int y, int width, int height, const char* text);	
+	Button(int x, int y, int width, int height, const wchar_t* text);
+	~Button();
 	void Update();
 	void Draw();
 	void OnButton(bool isDown);

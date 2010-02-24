@@ -122,9 +122,8 @@ private:
 	//Texture that is used to display ALL keys (even the ones with another color)
 	GX_Texture *buttonTexture;
 	
-
 public:
-	Keyboard(int position_x, int position_y, KeyboardType type=FULL);
+	Keyboard(int position_y, KeyboardType type=FULL);
 	~Keyboard();
 
 	void Draw();
