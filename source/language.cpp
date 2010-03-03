@@ -100,6 +100,22 @@ void InitializeLanguage()
 			TEXT_Right = L"Destra";
 			break;
 			
+		case CONF_LANG_FRENCH:
+			TEXT_InitializingNetwork = L"Initialisation du réseau";
+			TEXT_CouldNotConnect = L"Impossible de se connecter au réseau";
+			TEXT_ConnectingTo = L"Connexion à:";
+			TEXT_ConnectionFailed = L"Connexion échouée";
+			TEXT_EnterPassword = L"Entrer le mot de passe";
+			TEXT_Cancel = L"Annuler";
+			TEXT_Connect = L"Connexion";
+			TEXT_Exit = L"Quitter";
+			TEXT_Enter = L"Entrer";
+			TEXT_Up = L"Haut";
+			TEXT_Down = L"Bas";
+			TEXT_Left = L"Gauche";
+			TEXT_Right = L"Droite";
+			break;
+			
 			/* Need a helvetica font that supports japanese
 		case CONF_LANG_JAPANESE:
 			TEXT_InitializingNetwork = L"ネットワークの初期化";
@@ -119,7 +135,6 @@ void InitializeLanguage()
 			*/
 			
 		//TODO:
-		//	CONF_LANG_FRENCH,
 		//	CONF_LANG_SIMP_CHINESE,
 		//	CONF_LANG_TRAD_CHINESE,
 		//	CONF_LANG_KOREAN
