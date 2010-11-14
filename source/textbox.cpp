@@ -138,10 +138,8 @@ void Textbox::OnKey(int keycode, bool isDown) {
 	}
 	
 	//Start a selection drag from pressing shift
-	if(keycode == KS_Shift_L || keycode == KS_Shift_R) {
-		dragging = isDown;
-		if(isDown)
-			dragStart = selStart = selEnd = cursorPosition;
+	if((keycode == KS_Shift_L || keycode == KS_Shift_R) && isDown) {
+		dragStart = selStart = selEnd = cursorPosition;
 	}
 	
 	//Update cursor & selection with keyboard control
@@ -212,7 +210,7 @@ bool Textbox::IsMouseOver(int x, int y)
 
 /**
  * Find out before what character the user clicked
- * x argument is an absolute screen position
+ * @param x argument is an absolute screen position
  */
 int Textbox::CursorPositionFromCoordinate(int x)
 {

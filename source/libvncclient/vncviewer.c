@@ -45,7 +45,7 @@ static char* NoPassword(rfbClient* client) {
 }
 #else
 #include <stdio.h>
-#include <termios.h>
+//#include <termios.h>
 #endif
 
 static char* ReadPassword(rfbClient* client) {
