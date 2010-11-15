@@ -14,7 +14,6 @@ const wchar_t* TEXT_Down;
 const wchar_t* TEXT_Left;
 const wchar_t* TEXT_Right;
 
-const wchar_t* ggg;
 void InitializeLanguage()
 {
 	switch(CONF_GetLanguage())
@@ -69,10 +68,10 @@ void InitializeLanguage()
 			break;
 			
 		case CONF_LANG_SPANISH:
-			TEXT_InitializingNetwork = L"Iniciando la Conexion";
+			TEXT_InitializingNetwork = L"Inciando la Conexión";
 			TEXT_CouldNotConnect = L"No Se Pudo Conectar a la Red";
-			TEXT_ConnectingTo = L"Conectandose A:";
-			TEXT_ConnectionFailed = L"Fallo la conexion";
+			TEXT_ConnectingTo = L"Conectándose a:";
+			TEXT_ConnectionFailed = L"Falló la Conexión";
 			TEXT_EnterPassword = L"Introducir Clave";
 			TEXT_Cancel = L"Cancelar";
 			TEXT_Connect = L"Connectar";
