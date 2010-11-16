@@ -74,7 +74,7 @@ void InitializeLanguage()
 			TEXT_ConnectionFailed = L"Falló la Conexión";
 			TEXT_EnterPassword = L"Introducir Clave";
 			TEXT_Cancel = L"Cancelar";
-			TEXT_Connect = L"Connectar";
+			TEXT_Connect = L"Conectar";
 			TEXT_Exit = L"Salir";
 			TEXT_Enter = L"Entrar";
 			TEXT_Up = L"Arriba";
