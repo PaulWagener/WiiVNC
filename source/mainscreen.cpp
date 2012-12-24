@@ -18,13 +18,13 @@ FILE* openFile(const char* mode)
 		fatInited = true;
 	   
 	if(fatInited) {
-		DIR_ITER *homeDir = diropen("sd:/apps/wiivnc");
+		DIR *homeDir = opendir("sd:/apps/wiivnc");
 	   
 		const char* filename;
 		if(homeDir != NULL)
 		{
 			filename = "sd:/apps/wiivnc/ip.txt";
-			dirclose(homeDir);
+			closedir(homeDir);
 		} else {
 			filename = "sd:/wiivnc.txt";
 		}

@@ -382,7 +382,7 @@ Keyboard::Keyboard(int position_y, KeyboardType type) :
 	}};
 	
 	const struct ch_key alpha_keys[4][13] = 
-		{{{0, 0}, {'1',0}, {'2',0}, {'3',0}, {'4',0}, {'5',0}, {'6',0}, {'7',0}, {'8',0}, {'9',0}, {'0',0}},
+		{{{0, 0}, {'1',0}, {'2',0}, {'3',0}, {'4',0}, {'5',0}, {'6',0}, {'7',0}, {'8',0}, {'9',0}, {'0',0}, {'-', 0}},
 		{{'q','Q'}, {'w', 'W'}, {'e','E'}, {'r','R'}, {'t','T'}, {'y','Y'}, {'u','U'}, {'i','I'}, {'o','O'}, {'p','P'}},
 		{{'a', 'A'}, {'s', 'S'}, {'d', 'D'}, {'f', 'F'}, {'g', 'G'}, {'h', 'H'}, {'j', 'J'}, {'k', 'K'}, {'l', 'L'}},
 		{{'z', 'Z'}, {'x', 'X'}, {'c', 'C'}, {'v', 'V'}, {'b', 'B'}, {'n', 'N'}, {'m', 'M'}, {'.', 0}}};
@@ -429,7 +429,7 @@ Keyboard::Keyboard(int position_y, KeyboardType type) :
 		Keys[b++] = new CommandKey(this, 510, 64, 70, L"Return", KS_Return);
 	}
 	
-	Keys[b++] = new CommandKey(this, type == ALPHA_NUMERIC ? 440 : 520, 0, 60, L"Backspace", KS_BackSpace);
+	Keys[b++] = new CommandKey(this, type == ALPHA_NUMERIC ? 480 : 520, 0, 60, L"Backspace", KS_BackSpace);
 	Keys[b++] = new CommandKey(this, 370, 128, 40, L"Del", KS_Delete);
 	Keys[b++] = new CommandKey(this, type == FULL ? 460 : 90, 128, 40, TEXT_Left, KS_Left);
 	Keys[b++] = new CommandKey(this, type == FULL ? 540 : 130, 128, 40, TEXT_Right, KS_Right);
